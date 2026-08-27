@@ -1,0 +1,903 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>デイトレ検証シミュレーター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* スーファミ後期のRPGメニュー風パレット */
+  --bg:#080B18;
+  --win-top:#3A5FD0; --win-mid:#1D2F8C; --win-bot:#0E1848;
+  --edge-dark:#050818; --edge-light:#8FB4F0;
+  --text:#FFFFFF; --dim:#B9C8E8; --gold:#F7C948;
+  --pos:#7BE884; --neg:#FF8072; --dead:#C0392B;
+  --hp-hi:#4CD964; --hp-mid:#F7C948; --hp-lo:#FF4B3E;
+  --pixel:'Press Start 2P','DotGothic16',monospace;
+  --num:'VT323','DotGothic16',monospace;
+  --jp:'DotGothic16','Press Start 2P',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{
+  font-family:var(--jp);color:var(--text);
+  background:
+    repeating-linear-gradient(180deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px),
+    radial-gradient(120% 90% at 50% 0%, #1A2350 0%, var(--bg) 70%);
+  display:flex;justify-content:center;min-height:100vh;
+  -webkit-font-smoothing:none;
+}
+.device{width:100%;max-width:480px;padding:8px;min-height:100vh;display:flex;flex-direction:column;gap:8px}
+.win{
+  background:linear-gradient(180deg,var(--win-top) 0%,var(--win-mid) 45%,var(--win-bot) 100%);
+  border:2px solid var(--edge-dark);
+  box-shadow:inset 0 0 0 2px var(--edge-light);
+  padding:10px 12px;
+}
+h1,h2,h3,.pix{font-family:var(--pixel);font-weight:normal;text-shadow:1px 1px 0 var(--edge-dark)}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+header .t{font-family:var(--pixel);font-size:11px;color:var(--gold);text-shadow:1px 1px 0 var(--edge-dark)}
+header .date{font-family:var(--num);font-size:19px;color:var(--dim)}
+main{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+nav{display:flex;gap:6px}
+nav button{
+  flex:1;cursor:pointer;color:var(--dim);
+  background:linear-gradient(180deg,var(--win-top) 0%,var(--win-mid) 45%,var(--win-bot) 100%);
+  border:2px solid var(--edge-dark);box-shadow:inset 0 0 0 2px var(--edge-light);
+  padding:11px 2px;font-family:var(--jp);font-size:16px;text-shadow:1px 1px 0 var(--edge-dark);
+}
+nav button[aria-current="true"]{color:var(--gold)}
+nav button[aria-current="true"]::before{content:"▶ "}
+
+/* --- 警告 --- */
+.alert{border-color:#6B1F1F;box-shadow:inset 0 0 0 2px #E27070;
+  background:linear-gradient(180deg,#8E2B2B 0%,#5C1616 60%,#3A0D0D 100%);font-size:16px;line-height:1.6}
+.alert .pix{font-size:10px;color:#FFD9D9;display:block;margin-bottom:6px}
+
+/* --- パーティ --- */
+.card{
+  display:grid;grid-template-columns:68px 1fr;gap:12px;align-items:start;
+  width:100%;text-align:left;cursor:pointer;color:var(--text);font-family:var(--jp);
+}
+.sprite{width:64px;height:64px;image-rendering:pixelated;display:block;
+  filter:drop-shadow(2px 2px 0 rgba(0,0,0,.55))}
+.mini{width:22px;height:22px;image-rendering:pixelated;display:inline-block;vertical-align:middle}
+.buddy{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:14px;color:var(--dim)}
+.buddy b{color:var(--gold);font-weight:normal}
+
+/* --- 銘柄図鑑 --- */
+.bookgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.bookcell{padding:7px 4px;text-align:center}
+.bookcell.idle{opacity:.5}
+.bsprite{width:52px;height:52px;image-rendering:pixelated;display:block;margin:0 auto 3px;
+  filter:drop-shadow(2px 2px 0 rgba(0,0,0,.5))}
+.bsym{font-family:var(--pixel);font-size:9px;color:var(--gold);text-shadow:1px 1px 0 var(--edge-dark)}
+.bsec{font-size:12px;color:var(--dim);margin-top:3px}
+.bnum{font-family:var(--num);font-size:19px;margin-top:3px}
+.bsub{font-size:12px;color:var(--dim);line-height:1.4}
+@media (max-width:380px){.bookgrid{grid-template-columns:repeat(2,1fr)}}
+.card.dead{box-shadow:inset 0 0 0 2px var(--dead)}
+.row1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.cname{font-size:17px;text-shadow:1px 1px 0 var(--edge-dark)}
+.lv{font-family:var(--num);font-size:20px;color:var(--gold);white-space:nowrap}
+.hpline{display:flex;align-items:center;gap:7px;margin:6px 0 4px}
+.hptrack{flex:1;height:11px;background:#0A0F26;border:2px solid var(--edge-dark);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);position:relative;overflow:hidden}
+.hpfill{height:100%;transition:none}
+.hpnum{font-family:var(--num);font-size:18px;min-width:46px;text-align:right;color:var(--dim)}
+.money{font-family:var(--num);font-size:25px;color:var(--gold);letter-spacing:.5px;
+  text-shadow:1px 1px 0 var(--edge-dark)}
+.chg{font-size:16px;margin-left:7px}
+.up{color:var(--pos)} .down{color:var(--neg)}
+.tags{display:block;margin-top:5px}
+.tag{display:inline-block;border:1px solid var(--edge-light);background:rgba(0,0,0,.28);
+  padding:1px 6px;font-size:13px;margin:3px 4px 0 0;color:var(--dim)}
+.tag.warn{background:#7A2E12;border-color:#E0A070;color:#FFE0C8}
+.tag.good{background:#1E6B33;border-color:#7BE884;color:#DFFFE6}
+.tag.dead{background:#6B1F1F;border-color:#E27070;color:#FFD9D9}
+.blink{animation:blink 1.1s steps(2,start) infinite}
+@keyframes blink{to{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.blink{animation:none}}
+
+/* --- 表・詳細 --- */
+h3.sec{font-size:10px;color:var(--gold);margin-bottom:9px;letter-spacing:.5px}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:16px;
+  border-bottom:1px dotted rgba(255,255,255,.16)}
+.kv:last-child{border-bottom:none}
+.kv b{font-weight:normal;font-family:var(--num);font-size:20px;color:var(--gold)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:5px 6px;text-align:right;border-bottom:1px dotted rgba(255,255,255,.18)}
+th{font-size:13px;color:var(--gold);text-align:right}
+td.l,th.l{text-align:left}
+.num{font-family:var(--num);font-size:18px}
+.back{cursor:pointer;color:var(--gold);font-family:var(--jp);font-size:16px;
+  background:linear-gradient(180deg,var(--win-top) 0%,var(--win-mid) 45%,var(--win-bot) 100%);
+  border:2px solid var(--edge-dark);box-shadow:inset 0 0 0 2px var(--edge-light);padding:9px 14px}
+.hypo{font-size:16px;line-height:1.75;white-space:pre-wrap;color:#EAF0FF}
+.spark{width:100%;height:76px;display:block;margin-top:8px}
+.note{font-size:14px;line-height:1.65;color:var(--dim);margin-top:7px}
+.center{text-align:center;padding:28px 8px;font-size:16px;line-height:1.9}
+.head2{display:grid;grid-template-columns:76px 1fr;gap:12px;align-items:center}
+
+/* --- 用語解説 --- */
+.term{border-bottom:1px dotted var(--gold);cursor:help}
+#gloss{position:fixed;inset:0;background:rgba(4,7,20,.7);z-index:50;
+  display:flex;align-items:center;justify-content:center;padding:24px}
+#gloss[hidden]{display:none}
+#glossbox{max-width:360px;width:100%}
+.speech{display:block;font-size:14px;color:var(--dim);margin-top:4px}
+</style>
+<div class="device">
+  <div class="win" style="padding:8px 12px"><header>
+    <span class="t" id="title">PARTY</span>
+    <span class="date" id="asof">----/--/--</span>
+  </header></div>
+  <main id="view"><div class="win"><p class="center">よみこみちゅう…</p></div></main>
+  <nav>
+    <button data-tab="party" aria-current="true">パーティ</button>
+    <button data-tab="book">図鑑</button>
+    <button data-tab="rank">順位</button>
+    <button data-tab="info">監督</button>
+  </nav>
+</div>
+
+<div id="gloss" hidden>
+  <div class="win" id="glossbox">
+    <h3 class="sec" id="gtitle">ことば</h3>
+    <p class="hypo" id="gbody" style="font-size:16px"></p>
+    <p class="note" style="text-align:center;margin-top:10px">（タップで閉じる）</p>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   キャラのドット絵（48×48・ちびキャラ・かわいい路線）
+
+   お手本にした要素:
+     - 頭が体の2倍くらい大きい
+     - まん丸の黒い目 + 白い光 + ピンクのほっぺ
+     - やわらかいパステルの色
+     - 人間だけでなく動物もいる
+
+   作り方は「ハイブリッド」:
+     - 種族(人間/ねこ/いぬ/くま/うさぎ/ひつじ)・髪型・小物は手で設計
+     - どの種族になるか、色、髪型はキャラ名から自動で決まる
+   同じ名前なら必ず同じ絵になる。実在企業のロゴ・商標は使わない。
+   ===================================================================== */
+
+const N = 48;
+const CX = 23, CY = 19;          // 頭の中心
+const HEAD_RX = 13, HEAD_RY = 12;
+
+/* ---------- 乱数（名前から決まる） ---------- */
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function rng32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const hsl = (h, s, l) =>
+  `hsl(${Math.round((h % 360 + 360) % 360)} ${Math.round(Math.max(0, Math.min(100, s)))}% ${Math.round(Math.max(0, Math.min(100, l)))}%)`;
+
+/* ---------- 色（パステル4段階） ---------- */
+function ramp(hue, sat, lit, dead) {
+  const s = dead ? 5 : sat;
+  const h = dead ? 220 : hue;
+  return [
+    hsl(h, s, lit - 11),   // 影
+    hsl(h, s, lit),        // 基本
+    hsl(h, s * 0.9, lit + 8),
+    hsl(h, s * 0.8, lit + 14),
+  ];
+}
+const outlineOf = (hue, sat, dead) => hsl(dead ? 220 : hue, dead ? 10 : sat * 0.6, dead ? 30 : 34);
+
+/* ---------- 図形 ---------- */
+const blank = () => Array.from({ length: N }, () => new Array(N).fill(false));
+function ellipse(part, cx, cy, rx, ry) {
+  for (let y = Math.floor(cy - ry); y <= cy + ry; y++)
+    for (let x = Math.floor(cx - rx); x <= cx + rx; x++)
+      if (y >= 0 && y < N && x >= 0 && x < N &&
+          ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) part[y][x] = true;
+}
+const disc = (part, cx, cy, r) => ellipse(part, cx, cy, r, r);
+function box(part, x0, y0, x1, y1) {
+  for (let y = Math.max(0, y0); y <= Math.min(N - 1, y1); y++)
+    for (let x = Math.max(0, x0); x <= Math.min(N - 1, x1); x++) part[y][x] = true;
+}
+function tri(part, cx, topY, half, h) {
+  for (let t = 0; t < h; t++) {
+    const w = Math.round(half * (t / (h - 1)));
+    box(part, cx - w, topY + t, cx + w, topY + t);
+  }
+}
+
+/* ---------- やわらかい陰影 ----------
+   かわいさ優先で、ほぼ平塗り。ふちの内側に1段の影/光を入れるだけ。 */
+function depthField(mask) {
+  const d = Array.from({ length: N }, () => new Array(N).fill(0));
+  const inside = (y, x) => y >= 0 && y < N && x >= 0 && x < N && mask[y][x];
+  const q = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (!mask[y][x]) continue;
+    if (!(inside(y - 1, x) && inside(y + 1, x) && inside(y, x - 1) && inside(y, x + 1))) {
+      d[y][x] = 1; q.push([y, x]);
+    }
+  }
+  for (let i = 0; i < q.length; i++) {
+    const [y, x] = q[i];
+    for (const [ny, nx] of [[y - 1, x], [y + 1, x], [y, x - 1], [y, x + 1]])
+      if (inside(ny, nx) && d[ny][nx] === 0) { d[ny][nx] = d[y][x] + 1; q.push([ny, nx]); }
+  }
+  return d;
+}
+function paint(px, mask, tones, line) {
+  const d = depthField(mask);
+  const at = (y, x) => (d[y] && d[y][x] !== undefined) ? d[y][x] : 0;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (!mask[y][x]) continue;
+    if (d[y][x] <= 1) { px[y][x] = line; continue; }
+    if (d[y][x] === 2) {
+      const litSide = at(y - 1, x - 1) <= 1 || at(y - 1, x) <= 1;   // 上側は光
+      const darkSide = at(y + 1, x) <= 1 || at(y + 1, x + 1) <= 1;  // 下側は影
+      px[y][x] = litSide && !darkSide ? tones[3] : (darkSide && !litSide ? tones[0] : tones[1]);
+      continue;
+    }
+    px[y][x] = tones[1];
+  }
+}
+
+/* ---------- 小物（14×14。a 主色 / b 濃 / c 明 / d さし色 / k ふち） ---------- */
+const PROPS = {
+  chip: ['..............','...b.b.b.b....','..kkkkkkkkkk..','.bkaaaaaaaakb.','..kaccccccak..','.bkaccccccakb.','..kaccccccak..','.bkaaaaaaaakb.','..kkkkkkkkkk..','...b.b.b.b....','..............','..............'],
+  laptop: ['..............','..kkkkkkkkkk..','..kcccccccck..','..kcaaaaaack..','..kcaaaaaack..','..kcccccccck..','..kkkkkkkkkk..','.kbbbbbbbbbbk.','.kbdddddddbbk.','.kkkkkkkkkkkk.','..............','..............'],
+  phone: ['....kkkkkk....','....kaaaaak...','....kacccak...','....kacccak...','....kacccak...','....kacccak...','....kacccak...','....kacccak...','....kaaaaak...','....kkkkkk....','..............','..............'],
+  globe: ['.....kkkk.....','...kkcccckk...','..kcacccacak..','.kcaacccaaack.','.kaaaaaaaaaak.','.kcaacccaaack.','..kcacccacak..','...kkcccckk...','.....kkkk.....','..............','..............','..............'],
+  box: ['..............','..kkkkkkkkkk..','..kaaaddaaak..','..kaaaddaaak..','..kkkkkkkkkk..','..kbbbddbbbk..','..kbbbddbbbk..','..kbbbddbbbk..','..kbbbddbbbk..','..kkkkkkkkkk..','..............','..............'],
+  screen: ['..kkkkkkkkkk..','..kbbbbbbbbk..','..kbccc...bk..','..kbcccc..bk..','..kbccccc.bk..','..kbcccc..bk..','..kbccc...bk..','..kbbbbbbbbk..','..kkkkkkkkkk..','.....kaak.....','....kaaaak....','..............'],
+  car: ['..............','....kkkkkk....','...kcccccck...','..kkkkkkkkkk..','.kaaaaaaaaaak.','.kaaaaaaaaaak.','.kaaaaaaaaaak.','.kkbkkkkkkbkk.','...kbk....kbk.','...kkk....kkk.','..............','..............'],
+  coin: ['.....kkkk.....','...kkcccckk...','..kcaaaaaack..','.kcaadaadaack.','.kaaadaadaaak.','.kaaadaadaaak.','.kcaadaadaack.','..kcaaaaaack..','...kkcccckk...','.....kkkk.....','..............','..............'],
+  card: ['..............','..kkkkkkkkkk..','..kaaaaaaaak..','..kbbbbbbbbk..','..kaaaaaaaak..','..kacck...ak..','..kacck...ak..','..kaaaaaaaak..','..kkkkkkkkkk..','..............','..............','..............'],
+  chart: ['..............','.k...........k','.k.........dd.','.k.......dd..d','.k.....dd.....','.k...dd.......','.k.ccc..aaa...','.k.ccc.baaab..','.kkccckbaaabkk','..............','..............','..............'],
+  drum: ['...kkkkkkkk...','..kaaaaaaaak..','..kbbbbbbbbk..','..kaaaaaaaak..','..kaddddddak..','..kaaaaaaaak..','..kbbbbbbbbk..','..kaaaaaaaak..','...kkkkkkkk...','..............','..............','..............'],
+  wrench: ['..........kkk.','.........kaak.','.......kkkaak.','......kaaakk..','....kkaaak....','...kaaakk.....','..kaaak.......','.kaaak........','.kaak.........','.kkk..........','..............','..............'],
+  pill: ['..........kk..','........kkaak.','......kkaaaak.','....kkaaaaakk.','..kkcccaaakk..','.kcccccakk....','.kcccckk......','.kcckk........','.kkk..........','..............','..............','..............'],
+  cross: ['.....kkkk.....','.....kaak.....','.....kaak.....','.kkkkkaakkkkk.','.kaaaaaaaaaak.','.kaaaaaaaaaak.','.kkkkkaakkkkk.','.....kaak.....','.....kaak.....','.....kkkk.....','..............','..............'],
+  basket: ['...k......k...','...kk....kk...','....k....k....','..kkkkkkkkkk..','..kaaaaaaaak..','..kabaabaabk..','..kabaabaabk..','..kabaabaabk..','...kaaaaaak...','....kkkkkk....','..............','..............'],
+  hammer: ['...kkkkkkk....','..kaaaaaaak...','..kaccccaak...','..kaaaaaaak...','...kkkbkkk....','.....kbk......','.....kbk......','.....kbk......','.....kbk......','.....kkk......','..............','..............'],
+  shoe: ['..............','...kk.........','..kaak........','..kaaakk......','..kaccaakkkk..','..kacccaaaaak.','..kaaaaaaaaak.','.kbbbbbbbbbbk.','.kkkkkkkkkkkk.','..............','..............','..............'],
+  cup: ['.....d..d.....','....d..d......','.....d..d.....','..kkkkkkkkk...','..kccccccck...','..kabbbbbakkk.','..kabbbbbak.k.','..kaaaaaaakkk.','...kaaaaaak...','....kkkkkk....','..............','..............'],
+  burger: ['...kkkkkkkk...','..kaaaaaaaak..','.kacccccccak..','.kkkkkkkkkkk..','.kdddddddddk..','.kbbbbbbbbbk..','.kdddddddddk..','.kaaaaaaaaak..','..kkkkkkkkk...','..............','..............','..............'],
+  star: ['......kk......','.....kaak.....','.....kaak.....','kkkkkaaakkkkk.','kaaaaaaaaaaak.','.kaaaaaaaaak..','..kaaaaaaak...','..kaakkkaak...','.kaak...kaak..','.kk.......kk..','..............','..............'],
+  plane: ['..........kk..','.........kaak.','..kkkkkkkaak..','.kaaaaaaaaaak.','.kcccccccaaak.','.kkkkkkkkaaak.','.......kkaak..','......kaaak...','.....kaak.....','.....kkk......','..............','..............'],
+  helmet: ['.....kkkk.....','...kkaaaakk...','..kaaaaaaaak..','..kaccccccak..','.kaaaaaaaaaak.','kaaaaaaaaaaaak','kkkkkkkkkkkkkk','..............','..............','..............','..............','..............'],
+  wifi: ['...kkkkkkkk...','..kaaaaaaaak..','.ka........ak.','ka..kkkkkk..ak','....kaaaaak...','....ka....ak..','.......kk.....','......kaak....','......kaak....','.......kk.....','..............','..............'],
+  crown: ['..k........k..','..k...kk...k..','..kk.kaak.kk..','..kakaaaakak..','..kaaaaaaaak..','..kaaaaaaaak..','..kadaadaadk..','..kaaaaaaaak..','..kkkkkkkkkk..','..............','..............','..............'],
+  arrow: ['......kk......','.....kaak.....','....kaaaak....','...kaaaaaak...','..kaaaaaaaak..','.kkkkaaakkkk..','....kaaak.....','....kaaak.....','....kaaak.....','....kkkk......','..............','..............'],
+  scale: ['......kk......','.kkkkkaakkkkk.','.k....kk....k.','kak...kk...kak','kaak..kk..kaak','.kk...kk...kk.','......kk......','....kkaakk....','...kaaaaaak...','...kkkkkkkk...','..............','..............'],
+  bolt: ['.......kk.....','......kaak....','.....kaaak....','....kaaak.....','...kaaaakkkk..','...kaaaaaaak..','....kkkaaak...','......kaak....','.....kaak.....','.....kkk......','..............','..............'],
+  sun: ['..k...kk...k..','...k..kk..k...','.....kaak.....','...kkaaaakk...','.kkkaaaaaakkk.','...kaaaaaak...','.....kaak.....','...k..kk..k...','..k...kk...k..','..............','..............','..............'],
+};
+
+/* ---------- 種族(10種) ---------- */
+const SPECIES = ['human', 'human', 'human', 'cat', 'dog', 'bear', 'rabbit', 'sheep', 'panda', 'penguin', 'fox', 'frog'];
+const HAIRSTYLES = ['short', 'bob', 'twin', 'pony', 'spiky', 'long'];
+
+/* 種族ごとの「らしい」毛色(見分けがつくように種族で色域を固定する) */
+const FUR_CHOICES = {
+  cat:     [[38, 45, 80], [25, 60, 72], [220, 10, 76]],
+  dog:     [[32, 45, 70], [45, 40, 80], [20, 35, 62]],
+  bear:    [[30, 45, 62], [38, 50, 74]],
+  rabbit:  [[40, 15, 90], [345, 40, 84]],
+  sheep:   [[40, 22, 88]],
+  panda:   [[40, 8, 92]],
+  penguin: [[225, 28, 40]],
+  fox:     [[24, 62, 64], [16, 55, 58]],
+  frog:    [[100, 40, 70], [140, 35, 66]],
+};
+/* 人間の髪は定番色(黒/茶/金/ピンク/青/緑/紫) */
+const HAIR_COLORS = [[240, 12, 30], [25, 45, 42], [45, 60, 68], [340, 55, 70], [210, 45, 60], [130, 30, 55], [270, 40, 62]];
+
+/**
+ * ちびキャラのドット絵を作る。
+ * @param {string} name  キャラ名 or 銘柄コード（同じなら必ず同じ絵）
+ * @param {object} opt   {prop:'chip', dead:false}
+ */
+function makeChibi(name, opt = {}) {
+  const { prop = null, dead = false } = opt;
+  const seed = hashStr(name);
+  const r = rng32(seed);
+  const species = SPECIES[seed % SPECIES.length];
+  const outfitHue = ((seed >>> 16) + 150) % 360;
+  const furPick = FUR_CHOICES[species] || [[(seed >>> 6) % 360, 34, 76]];
+  const [furHue, furSat, furLit] = furPick[(seed >>> 9) % furPick.length];
+  const [hairHue, hairSat, hairLit] = HAIR_COLORS[(seed >>> 11) % HAIR_COLORS.length];
+
+  const px = Array.from({ length: N }, () => new Array(N).fill(null));
+
+  // 色: 肌はクリーム色、動物の毛はパステル、服もパステル
+  const skinT = ramp(28, dead ? 5 : 42, 84, dead);
+  const skinL = outlineOf(24, 40, dead);
+  const furT = ramp(furHue, dead ? 5 : furSat, furLit, dead);
+  const furL = outlineOf(furHue, furSat, dead);
+  const outfitT = ramp(outfitHue, dead ? 5 : 44, 68, dead);
+  const outfitL = outlineOf(outfitHue, 46, dead);
+  const hairT = ramp(hairHue, dead ? 5 : hairSat, hairLit, dead);
+  const hairL = outlineOf(hairHue, hairSat, dead);
+  const darkT = ramp(240, dead ? 5 : 10, 26, dead);   // パンダの耳・もよう用
+  const darkL = outlineOf(240, 12, dead);
+
+  const isAnimal = species !== 'human';
+  const headT = isAnimal ? furT : skinT;
+  const headL = isAnimal ? furL : skinL;
+
+  /* --- 耳（頭より先に塗る = 頭のうしろ） --- */
+  const ears = blank(), earIn = blank();
+  if (species === 'cat') {
+    tri(ears, CX - 8, 3, 4, 7); tri(ears, CX + 8, 3, 4, 7);
+    tri(earIn, CX - 8, 5, 2, 4); tri(earIn, CX + 8, 5, 2, 4);
+  } else if (species === 'dog') {
+    ellipse(ears, CX - 14, 14, 3, 8); ellipse(ears, CX + 14, 14, 3, 8);
+  } else if (species === 'bear') {
+    disc(ears, CX - 9, 6, 4); disc(ears, CX + 9, 6, 4);
+    disc(earIn, CX - 9, 6, 2); disc(earIn, CX + 9, 6, 2);
+  } else if (species === 'rabbit') {
+    ellipse(ears, CX - 6, 3, 3, 8); ellipse(ears, CX + 6, 3, 3, 8);
+    ellipse(earIn, CX - 6, 4, 1, 5); ellipse(earIn, CX + 6, 4, 1, 5);
+  } else if (species === 'sheep') {
+    // 羊は毛のもこもこを頭のまわりに
+    for (let k = 0; k < 7; k++) {
+      const a = Math.PI * (1.05 + 0.15 * k);
+      disc(ears, Math.round(CX + Math.cos(a) * 12), Math.round(CY + Math.sin(a) * 11 - 1), 4);
+    }
+  } else if (species === 'panda') {
+    disc(ears, CX - 9, 6, 4); disc(ears, CX + 9, 6, 4);
+  } else if (species === 'fox') {
+    tri(ears, CX - 8, 1, 5, 9); tri(ears, CX + 8, 1, 5, 9);
+    tri(earIn, CX - 8, 4, 2, 5); tri(earIn, CX + 8, 4, 2, 5);
+  } else if (species === 'frog') {
+    // カエルは頭の上の目玉(あとで目を描き込む)
+    disc(ears, CX - 7, 6, 4); disc(ears, CX + 7, 6, 4);
+  }
+  const earT = species === 'panda' ? darkT : furT;
+  const earL = species === 'panda' ? darkL : furL;
+  if (ears.some(row => row.some(Boolean))) paint(px, ears, earT, earL);
+  if (earIn.some(row => row.some(Boolean))) {
+    const inT = ramp(350, dead ? 5 : 45, 82, dead);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (earIn[y][x]) px[y][x] = inT[1];
+  }
+
+  /* --- 体（頭のうしろに少し見える） --- */
+  const bodyM = blank(), feetM = blank();
+  ellipse(bodyM, CX, 38, 9, 8);
+  box(bodyM, CX - 9, 38, CX + 9, 43);
+  box(feetM, CX - 7, 44, CX - 2, 46); box(feetM, CX + 2, 44, CX + 7, 46);
+  // 手は描かない(この大きさだと記号に見えてしまう。お手本もほぼ省略している)
+  paint(px, bodyM, outfitT, outfitL);
+  paint(px, feetM, isAnimal ? furT : ramp(outfitHue, 30, 40, dead), isAnimal ? furL : outlineOf(outfitHue, 32, dead));
+
+  /* --- 頭（大きく・最後に上書き = 一番手前） --- */
+  const headM = blank();
+  ellipse(headM, CX, CY, HEAD_RX, HEAD_RY);
+  paint(px, headM, headT, headL);
+
+  /* --- 動物の口まわり（マズル） --- */
+  if (['cat', 'dog', 'bear', 'rabbit', 'fox'].includes(species)) {
+    const muz = blank();
+    ellipse(muz, CX, CY + 6, 5, 4);
+    const muzT = ramp(furHue, dead ? 5 : 20, 90, dead);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (muz[y][x]) px[y][x] = muzT[1];
+  }
+  if (species === 'sheep') {
+    // 顔はミルクティー色
+    const face = blank();
+    ellipse(face, CX, CY + 2, 9, 8);
+    const faceT = ramp(28, dead ? 5 : 30, 78, dead);
+    paint(px, face, faceT, outlineOf(26, 32, dead));
+  }
+
+  /* --- 人間の髪 --- */
+  if (!isAnimal) {
+    const hair = blank();
+    const style = HAIRSTYLES[(seed >>> 3) % HAIRSTYLES.length];
+    ellipse(hair, CX, CY - 1, HEAD_RX + 1, HEAD_RY + 1);
+    // 顔を出す: 額から下をくり抜き、前髪をぎざぎざに残す
+    for (let y = CY - 4; y < N; y++) for (let x = 0; x < N; x++) hair[y][x] = false;
+    for (let x = CX - 11; x <= CX + 11; x++) {
+      const deep = ((x - CX + 22) % 4 < 2) ? 2 : 0;   // ぎざぎざ前髪
+      for (let y = CY - 4; y < CY - 2 + deep; y++)
+        if (headM[y] && headM[y][x]) hair[y][x] = true;
+    }
+    // 横の毛(もみあげ)
+    for (const sx of [-1, 1]) {
+      box(hair, CX + sx * 12 - 1, CY - 4, CX + sx * 12 + 1, CY + 4);
+    }
+    if (style === 'bob') { box(hair, CX - 13, CY - 2, CX - 11, CY + 8); box(hair, CX + 11, CY - 2, CX + 13, CY + 8); }
+    if (style === 'long') { box(hair, CX - 13, CY - 2, CX - 11, 36); box(hair, CX + 11, CY - 2, CX + 13, 36); }
+    if (style === 'twin') { disc(hair, CX - 14, CY + 8, 4); disc(hair, CX + 14, CY + 8, 4); }
+    if (style === 'pony') { disc(hair, CX + 13, CY - 8, 4); ellipse(hair, CX + 15, CY, 2, 8); }
+    if (style === 'spiky') {
+      for (let k = 0; k < 4; k++) tri(hair, CX - 7 + k * 5, 2, 3, 6);
+    }
+    paint(px, hair, hairT, hairL);
+  }
+
+  /* --- 種族の顔の特徴(目より先に描く下地) --- */
+  if (species === 'panda') {
+    // 目のまわりの黒いもよう
+    const patch = blank();
+    ellipse(patch, CX - 5, CY + 2, 3, 4); ellipse(patch, CX + 5, CY + 2, 3, 4);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++)
+      if (patch[y][x] && px[y][x]) px[y][x] = darkT[1];
+  }
+  if (species === 'penguin') {
+    // 白いお顔
+    const face = blank();
+    ellipse(face, CX, CY + 3, 8, 7);
+    const w = dead ? '#BBBBBB' : hsl(40, 15, 93);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++)
+      if (face[y][x] && px[y][x] && px[y][x] !== headL) px[y][x] = w;
+  }
+
+  /* --- 目(名前で表情が変わる: ふつう/にっこり/きらきら/ねむそう) --- */
+  const eyeY = CY + 1;
+  const eye = dead ? '#000000' : '#2B2420';
+  const expr = dead ? 'round' : ['round', 'round', 'happy', 'sparkle', 'sleepy'][(seed >>> 13) % 5];
+
+  const drawEye = (ex) => {
+    if (expr === 'happy') {                     // にっこり(∪の形)
+      for (const [dy, dx] of [[0, 0], [1, 1], [1, 2], [0, 3]])
+        if (px[eyeY + dy] && px[eyeY + dy][ex + dx - 1]) px[eyeY + dy][ex + dx - 1] = eye;
+      return;
+    }
+    if (expr === 'sleepy') {                    // ねむそう(横線)
+      for (let dx = 0; dx < 3; dx++)
+        if (px[eyeY + 1] && px[eyeY + 1][ex + dx]) px[eyeY + 1][ex + dx] = eye;
+      return;
+    }
+    for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+      const yy = eyeY + dy, xx = ex + dx;
+      if (px[yy] && px[yy][xx]) px[yy][xx] = eye;
+    }
+    if (px[eyeY] && px[eyeY][ex]) px[eyeY][ex] = dead ? '#444' : '#FFFFFF';   // 目の光
+    if (expr === 'sparkle' && px[eyeY + 2] && px[eyeY + 2][ex + 2]) px[eyeY + 2][ex + 2] = '#FFFFFF';
+  };
+
+  if (species === 'frog') {
+    // カエルは頭の上の目玉に目を描く
+    for (const bx of [CX - 7, CX + 7]) {
+      for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++)
+        if (px[5 + dy] && px[5 + dy][bx - 1 + dx]) px[5 + dy][bx - 1 + dx] = '#FFFFFF';
+      if (px[6] && px[6][bx]) px[6][bx] = eye;
+    }
+  } else {
+    drawEye(CX - 6); drawEye(CX + 4);
+  }
+
+  /* --- ほっぺ --- */
+  if (!dead) {
+    const blush = hsl(354, 75, 82);
+    for (const bx of [CX - 10, CX + 8])
+      for (let dx = 0; dx < 2; dx++)
+        if (px[eyeY + 4] && px[eyeY + 4][bx + dx]) px[eyeY + 4][bx + dx] = blush;
+  }
+
+  /* --- 口・鼻(種族ごと) --- */
+  const nose = dead ? '#333333' : hsl(350, 55, 62);
+  if (species === 'penguin') {
+    const beak = dead ? '#666666' : hsl(35, 85, 58);
+    for (let dx = -1; dx <= 1; dx++) px[CY + 4][CX + dx] = beak;
+    px[CY + 5][CX] = beak;
+  } else if (species === 'frog') {
+    for (let dx = -3; dx <= 3; dx++)                 // にっこり大きな口
+      if (px[CY + 5] && px[CY + 5][CX + dx]) px[CY + 5][CX + dx] = eye;
+  } else if (species === 'cat' || species === 'fox') {
+    px[CY + 4][CX] = nose; px[CY + 4][CX + 1] = nose;
+    px[CY + 6][CX - 1] = eye; px[CY + 6][CX + 2] = eye;   // ωの口
+    px[CY + 5][CX] = eye; px[CY + 5][CX + 1] = eye;
+  } else if (isAnimal && species !== 'sheep') {
+    px[CY + 5][CX] = nose; px[CY + 5][CX + 1] = nose;
+    if (px[CY + 7]) px[CY + 7][CX] = eye;
+  } else {
+    const my = eyeY + 5;
+    px[my][CX - 1] = eye; px[my][CX] = eye; px[my][CX + 1] = eye;
+    if (!dead && (seed >>> 21) % 3 === 0) px[my + 1][CX] = hsl(354, 70, 72);   // あけた口
+  }
+
+  /* --- アクセサリー(名前で決まる個性) --- */
+  let acc = dead ? 'none' : ['none', 'ribbon', 'glasses', 'flower', 'star', 'none'][(seed >>> 18) % 6];
+  if (species === 'frog' && acc === 'glasses') acc = 'star';   // カエルは目が頭の上なのでメガネは似合わない
+  if (acc === 'ribbon') {
+    // 頭の右上にリボン
+    const rh = (seed >>> 20) % 360;
+    const rb = hsl(rh, 70, 66), rbD = hsl(rh, 70, 48);
+    const ry = ['rabbit', 'cat', 'fox'].includes(species) ? 10 : 7;
+    const rx = CX + 7;
+    for (const [dy, dx] of [[-1, -3], [-1, -2], [0, -3], [0, -2], [1, -3],
+                            [-1, 2], [-1, 3], [0, 2], [0, 3], [1, 3]]) {
+      const yy = ry + dy, xx = rx + dx;
+      if (yy >= 0 && yy < N && xx >= 0 && xx < N) px[yy][xx] = rb;
+    }
+    for (const [dy, dx] of [[-1, -1], [-1, 0], [0, -1], [0, 0]]) px[ry + dy][rx + dx] = rbD;
+  } else if (acc === 'glasses') {
+    // まるメガネ
+    const g = dead ? '#555555' : '#4A4455';
+    for (const ex of [CX - 6, CX + 4]) {
+      for (let dy = -1; dy <= 3; dy++) for (let dx = -1; dx <= 3; dx++) {
+        if (!(dy === -1 || dy === 3 || dx === -1 || dx === 3)) continue;
+        if ((dy === -1 || dy === 3) && (dx === -1 || dx === 3)) continue;   // 角を落とす
+        const yy = eyeY + dy, xx = ex + dx;
+        if (px[yy] && px[yy][xx]) px[yy][xx] = g;
+      }
+    }
+    if (px[eyeY + 1]) { px[eyeY + 1][CX - 1] = g; px[eyeY + 1][CX] = g; px[eyeY + 1][CX + 1] = g; }
+  } else if (acc === 'flower') {
+    // 頭の左上にお花
+    const fy = 8, fx = CX - 9;
+    const petal = '#FFF0F6', center = hsl(45, 90, 62);
+    for (const [dy, dx] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const yy = fy + dy, xx = fx + dx;
+      if (yy >= 0 && yy < N && xx >= 0 && xx < N) px[yy][xx] = petal;
+    }
+    px[fy][fx] = center;
+  } else if (acc === 'star') {
+    // 頭の右上に星のかざり
+    const sy = 8, sx = CX + 9;
+    const st = hsl(48, 95, 66);
+    for (const [dy, dx] of [[-1, 0], [1, 0], [0, -1], [0, 1], [0, 0]]) {
+      const yy = sy + dy, xx = sx + dx;
+      if (yy >= 0 && yy < N && xx >= 0 && xx < N) px[yy][xx] = st;
+    }
+  }
+
+  /* --- 小物（右下に添える） --- */
+  const art = PROPS[prop];
+  if (art) {
+    const propHue = (hashStr(prop || '') >>> 3) % 360;
+    const P = ramp(propHue, dead ? 5 : 62, 58, dead);
+    const D = ramp((propHue + 65) % 360, dead ? 5 : 70, 62, dead);
+    const map = { a: P[1], b: P[0], c: P[3], d: D[2], k: outlineOf(propHue, 55, dead) };
+    const ox = 34, oy = 33;
+    for (let y = 0; y < art.length; y++) for (let x = 0; x < art[y].length; x++) {
+      const ch = art[y][x];
+      if (ch === '.' || !map[ch]) continue;
+      const yy = oy + y, xx = ox + x;
+      if (yy >= 0 && yy < N && xx >= 0 && xx < N) px[yy][xx] = map[ch];
+    }
+  }
+
+  /* --- SVGへ（同じ色の横並びをまとめて軽くする） --- */
+  let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${N} ${N}" `
+          + `shape-rendering="crispEdges" class="sprite">`;
+  for (let y = 0; y < N; y++) {
+    let x = 0;
+    while (x < N) {
+      const c = px[y][x];
+      if (!c) { x++; continue; }
+      let w = 1;
+      while (x + w < N && px[y][x + w] === c) w++;
+      out += `<rect x="${x}" y="${y}" width="${w}" height="1" fill="${c}"/>`;
+      x += w;
+    }
+  }
+  return out + '</svg>';
+}
+
+function makeSprite(name, dead = false, prop = null) {
+  return makeChibi(name, { prop, dead });
+}
+
+</script>
+<script>
+let STATE = null, TAB = 'party', DETAIL = null;
+
+const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
+const esc = s => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+
+/* ---------- 用語解説（点線のことばをタップすると出る） ---------- */
+const GLOSS = {
+  'HP': '体力ゲージ。損した分だけ減ります。一番調子が良かったときから2割減ると脱落（そのキャラはもう取引できません）。',
+  'Lv': '取引した回数。100回未満は、成績が良くても悪くても「まぐれ」と区別がつかないので、判定不能あつかいです。',
+  'SPY君': 'アメリカの大企業500社をまとめ買いして、あとは寝ているだけのキャラ。判断ゼロ。ほかのキャラはこの子に勝てないと「わざわざ売買した意味がない」ことになります。',
+  'コスト': '売買1回ごとに引かれるお金。手数料や「注文した瞬間に値段が少し不利になる」ぶんなど。デイトレ最大の敵で、いまのキャラたちの負けの主な原因はこれです。',
+  '利益÷コスト': '稼ぎがコストの何倍あるか。3倍未満だと、少し環境が悪くなるだけで赤字に転落します。',
+  '勝率': '勝った取引の割合。高くても、1回の負けが大きければ赤字になるので、これ単独では信用しません。',
+  '損益比': '勝ったときの平均利益 ÷ 負けたときの平均損失。1より大きければ「勝つときのほうが大きく勝てている」。',
+  'ドローダウン': '一番調子が良かったときから、どれだけ資産が減ったか。',
+  '局面': '相場の状態。上がり調子・下がり調子・横ばいの3つに分けています。1つの局面でしか勝てないキャラは、相場が変わると崩れます。',
+  '昇格候補': 'Lv100以上・SPY君超え・利益÷コスト3倍以上、の3条件を全て満たしたキャラ。それでも「答え合わせ期間」の試験が残っています。',
+  '脱落': 'HPゼロ。一番良かったときから2割の損。このキャラは復活せず、直して出すなら新キャラとして再登録です。',
+  'VWAP': 'その日の「みんなの平均購入価格」。出来高で重みづけした平均値段のこと。',
+  '作成期間': 'キャラを作って調整してよい期間。過去データの前半です。',
+  '答え合わせ期間': '調整に使わず、最後まで封印しておく直近6ヶ月。ここで同じ成績が出て、はじめて本物と言えます。',
+  '図鑑': '銘柄（会社の株）ごとの成績表。全キャラ合計でその銘柄からいくら取れたかが見えます。',
+};
+const term = (label, key) => `<span class="term" data-g="${key || label}">${label}</span>`;
+
+function showGloss(key){
+  const g = GLOSS[key];
+  if(!g) return;
+  document.getElementById('gtitle').textContent = key;
+  document.getElementById('gbody').textContent = g;
+  document.getElementById('gloss').hidden = false;
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('.term,[data-g]');
+  if (t && t.dataset.g && GLOSS[t.dataset.g]) {
+    e.stopPropagation(); e.preventDefault();
+    showGloss(t.dataset.g);
+  }
+}, true);
+
+/* ドット絵は画像として埋め込む（点の数が多いので、1つのタグにまとめて軽くする） */
+const SPRITE_CACHE = new Map();
+function spriteImg(name, prop, dead, cls){
+  const key = name + '|' + prop + '|' + (dead ? 1 : 0);
+  if(!SPRITE_CACHE.has(key)){
+    const svg = makeChibi(name, {prop, dead});
+    SPRITE_CACHE.set(key, 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg))));
+  }
+  return `<img class="${cls}" src="${SPRITE_CACHE.get(key)}" alt="${esc(name)}">`;
+}
+function chg(p){
+  const cls = p > 0 ? 'up' : p < 0 ? 'down' : '';
+  const mark = p > 0 ? '▲' : p < 0 ? '▼' : '－';
+  return `<span class="chg ${cls}">${mark}${Math.abs(p).toFixed(1)}%</span>`;
+}
+function hpBar(hp, dead){
+  const col = dead ? 'var(--dead)' : hp > 55 ? 'var(--hp-hi)' : hp > 25 ? 'var(--hp-mid)' : 'var(--hp-lo)';
+  return `<span class="hpline">
+    <span class="hptrack${(hp <= 25 && !dead) ? ' blink' : ''}">
+      <span class="hpfill" style="width:${Math.max(0, Math.min(100, hp))}%;background:${col}"></span>
+    </span><span class="hpnum">${Math.round(hp)}%</span></span>`;
+}
+
+function banner(){
+  if(!STATE.meta.is_synthetic) return '';
+  return `<div class="win alert"><span class="pix">!! DUMMY DATA !!</span>
+    これは<b>ダミー（にせもの）のデータ</b>での成績です。
+    ここで勝っても、戦略が正しい証拠には一切なりません。</div>`;
+}
+
+function speech(p){
+  if (p.is_benchmark) return 'ねてるだけで つよい';
+  if (p.eliminated) return 'もう うごけない…';
+  if (p.promoted) return 'ほんものかも しれない！';
+  if (!p.judgeable) return 'まだ しゅぎょうちゅう';
+  if (p.cost_warning) return 'てすうりょうが つらいよ…';
+  if (p.vs_benchmark_pt > 0) return 'ちょうし いいよ！';
+  return 'がんばってるよ！';
+}
+
+function summaryCard(){
+  const chars = STATE.party.filter(x => !x.is_benchmark);
+  const deadN = chars.filter(x => x.eliminated).length;
+  const leader = STATE.party[0];
+  const costN = chars.filter(x => x.cost_warning).length;
+  const l1 = `キャラ${chars.length}体中 ${deadN}体が${term('脱落')}。`;
+  const l2 = leader.is_benchmark
+    ? `首位は${term('SPY君')}（寝てるだけの物差し役）。まだ誰も超えられていません。`
+    : `首位は ${esc(leader.name)}！`;
+  const l3 = costN > 0
+    ? `負けの主な原因は「${term('コスト')}負け」。売買のたびに引かれるお金で、稼ぎが消えています。`
+    : '';
+  return `<div class="win"><h3 class="sec">いまの戦況</h3>
+    <p class="note" style="font-size:15px;line-height:1.8">${l1}${l2}<br>${l3}</p>
+    <p class="note">点線のことばは、タップすると説明が出ます。キャラをタップすると詳しい成績が見られます。</p></div>`;
+}
+
+function viewParty(){
+  return banner() + summaryCard() + STATE.party.map((p, i) => `
+    <button class="win card ${p.eliminated ? 'dead' : ''}" data-i="${i}">
+      <span>${spriteImg(p.name, p.prop, p.eliminated, 'sprite')}</span>
+      <span>
+        <span class="row1">
+          <span class="cname">${esc(p.name)}</span>
+          <span class="lv">${p.is_benchmark ? 'Lv --' : 'Lv ' + p.level}</span>
+        </span>
+        ${p.is_benchmark ? '' : hpBar(p.hp, p.eliminated)}
+        <span class="money">${yen(p.equity_jpy)}</span>${chg(p.return_pct)}
+        <span class="speech">「${speech(p)}」</span>
+        ${p.buddy ? `<span class="buddy">${spriteImg(p.buddy, p.buddy_prop, false, 'mini')}
+          <span>今日の相棒 <b>${p.buddy}</b>（${p.buddy_trades}回）</span></span>` : ''}
+        <span class="tags">
+          ${p.eliminated ? '<span class="tag dead" data-g="脱落">たおれた</span>' : ''}
+          ${p.promoted ? '<span class="tag good" data-g="昇格候補">昇格候補</span>' : ''}
+          ${(!p.is_benchmark && !p.judgeable) ? `<span class="tag" data-g="Lv">判定不能 Lv${STATE.meta.min_trades}未満</span>` : ''}
+          ${(p.cost_warning && p.level) ? '<span class="tag warn" data-g="コスト">コスト負け</span>' : ''}
+          ${p.regime_warning ? '<span class="tag warn" data-g="局面">局面かたより</span>' : ''}
+          ${p.is_benchmark ? '<span class="tag" data-g="SPY君">きじゅんせん</span>' : ''}
+        </span>
+      </span>
+    </button>`).join('');
+}
+
+function viewRank(){
+  return banner() + `<div class="win"><h3 class="sec">RANKING</h3>
+    <table><tr><th>順</th><th class="l">キャラ</th><th>資産</th><th>騰落</th><th>Lv</th></tr>
+    ${STATE.party.map(p => `<tr>
+      <td class="num">${p.rank}</td>
+      <td class="l">${esc(p.name)}${p.eliminated ? ' <span class="tag dead">✖</span>' : ''}</td>
+      <td class="num">${yen(p.equity_jpy)}</td>
+      <td class="num ${p.return_pct >= 0 ? 'up' : 'down'}">${p.return_pct >= 0 ? '▲' : '▼'}${Math.abs(p.return_pct).toFixed(1)}%</td>
+      <td class="num">${p.is_benchmark ? '--' : p.level}</td></tr>`).join('')}
+    </table>
+    <p class="note">基準線（SPY君）も順位に入れています。これを超えられない戦略は、
+      わざわざデイトレせずSPYを買って寝ていればよかった、ということになります。</p></div>`;
+}
+
+function viewBook(){
+  const b = STATE.book || [];
+  const traded = b.filter(s => s.trades > 0);
+  const total = traded.reduce((a, s) => a + s.net_pnl, 0);
+  return banner() + `<div class="win"><h3 class="sec">SYMBOL BOOK</h3>
+    <p class="note">全キャラ合計で、その銘柄からいくら取れたか。
+      絵は業種を表す小物つき（実在企業のロゴは使っていません）。</p>
+    <div class="kv"><span>取引のあった銘柄</span><b>${traded.length} / ${b.length}</b></div>
+    <div class="kv"><span>合計の手取り</span><b class="${total >= 0 ? 'up' : 'down'}">${total >= 0 ? '+' : ''}${Math.round(total)}ドル</b></div>
+  </div>
+  <div class="bookgrid">
+    ${b.map(s => `<div class="win bookcell ${s.trades ? '' : 'idle'}">
+      ${spriteImg(s.symbol, s.prop, s.trades === 0, 'bsprite')}
+      <div class="bsym">${s.symbol}</div>
+      <div class="bsec">${esc(s.sector)}</div>
+      ${s.trades ? `<div class="bnum ${s.net_pnl >= 0 ? 'up' : 'down'}">${s.net_pnl >= 0 ? '+' : ''}${Math.round(s.net_pnl)}ドル</div>
+        <div class="bsub">${s.trades}回 / 勝率${s.win_rate}%</div>
+        ${s.best_strategy ? `<div class="bsub">得意: ${esc(s.best_strategy)}</div>` : ''}`
+      : '<div class="bsub">まだ取引なし</div>'}
+    </div>`).join('')}
+  </div>`;
+}
+
+function viewHelp(){
+  return `
+  <div class="win"><h3 class="sec">これは何のゲーム？</h3>
+    <p class="hypo">株の自動売買の「やり方」を1体ずつキャラにして、
+過去2年の本物の株価データの中で戦わせるゲームです。
+お金は1円も使いません。
+
+生き残って、寝てるだけのSPY君に勝ったやり方だけが
+「本物」と認められます。</p>
+  </div>
+  <div class="win"><h3 class="sec">ことばの意味</h3>
+    <div class="kv"><span>キャラ</span><b>株の買い方ルール1つ</b></div>
+    <div class="kv"><span>Lv</span><b>取引した回数</b></div>
+    <div class="kv"><span>HP</span><b>体力。2割損したら脱落</b></div>
+    <div class="kv"><span>SPY君</span><b>買って寝てるだけの物差し役</b></div>
+    <div class="kv"><span>コスト</span><b>売買1回ごとに引かれるお金</b></div>
+    <div class="kv"><span>図鑑</span><b>会社(銘柄)ごとの成績表</b></div>
+    <p class="note">「コスト負け」= 売買のたびに引かれるお金で利益が消えている状態。
+      いまのキャラたちの負けは、ほぼ全部これが原因です。</p>
+  </div>
+  <div class="win"><h3 class="sec">かちぬけの条件</h3>
+    <p class="note">① Lv100以上（まぐれの排除）
+      ② SPY君より上（寝てる人に勝つ）
+      ③ 利益がコストの3倍以上（実戦で消えない利益）
+      —— 3つそろって、はじめて「昇格候補」です。</p>
+  </div>`;
+}
+
+function viewInfo(){
+  const m = STATE.meta;
+  return banner() + viewHelp() + `
+  <div class="win"><h3 class="sec">CONDITIONS</h3>
+    <div class="kv"><span>検証期間</span><b>${m.start} 〜 ${m.end}</b></div>
+    <div class="kv"><span>区間</span><b>${esc(m.period || '-')}</b></div>
+    <div class="kv"><span>データ</span><b>${m.is_synthetic ? 'ダミー' : '実データ'}</b></div>
+    <div class="kv"><span>銘柄数</span><b>${m.symbols}</b></div>
+    <div class="kv"><span>執行モデル</span><b>レベル${m.execution_level}</b></div>
+    <div class="kv"><span>開始資金</span><b>${yen(m.initial_jpy)}</b></div>
+    <div class="kv"><span>表示レート</span><b>1ドル ${m.usdjpy}円</b></div>
+  </div>
+  <div class="win"><h3 class="sec">PROMOTION</h3>
+    <p class="note">次の3つが全部そろうまで「勝っている」とは言いません。</p>
+    <div class="kv"><span>1) レベル</span><b>${m.min_trades}以上</b></div>
+    <div class="kv"><span>2) 基準線</span><b>SPY君を超える</b></div>
+    <div class="kv"><span>3) 利益÷コスト</span><b>${m.cost_multiple_warning}倍以上</b></div>
+  </div>
+  ${m.snapshot ? `<div class="win"><h3 class="sec">SNAPSHOT</h3>
+    <p class="note">この画面は <b>${STATE.generated_at}</b> 時点の記録です。
+      自動では更新されません。新しい結果を見るには、PCで検証を実行し直してください。</p></div>` : ''}
+  <div class="win"><h3 class="sec">NOT YET</h3>
+    <p class="note">週報・監督コマンド（続投／改造／引退）・人間プレイヤーの手入力はM6で作ります。
+      称号と封印解除の画面はM7です。いまは検証エンジンと成績表示までが動いています。</p>
+  </div>`;
+}
+
+function sparkline(curve){
+  if(!curve || curve.length < 2) return '';
+  const v = curve.map(c => c[1]);
+  const min = Math.min(...v), max = Math.max(...v), span = (max - min) || 1;
+  const pts = v.map((y, i) => `${(i / (v.length - 1) * 100).toFixed(2)},${(62 - (y - min) / span * 56).toFixed(2)}`).join(' ');
+  const first = v[0], last = v[v.length - 1];
+  return `<svg class="spark" viewBox="0 0 100 66" preserveAspectRatio="none">
+    <polyline points="0,${(62 - (first - min) / span * 56).toFixed(2)} 100,${(62 - (first - min) / span * 56).toFixed(2)}"
+      fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="2 2"/>
+    <polyline points="${pts}" fill="none" stroke="${last >= first ? '#7BE884' : '#FF8072'}" stroke-width="2"/></svg>`;
+}
+
+function viewDetail(){
+  const p = STATE.party[DETAIL];
+  const RG = {up:'上昇', down:'下落', flat:'横ばい'};
+  const rg = ['up','down','flat'].filter(k => p.regimes[k]).map(k => {
+    const r = p.regimes[k];
+    return `<div class="kv"><span>${RG[k]}相場（${r.trades}回）</span>
+      <b class="${r.net_pnl >= 0 ? 'up' : 'down'}">${r.net_pnl >= 0 ? '+' : ''}${Math.round(r.net_pnl)}ドル</b></div>`;
+  }).join('');
+
+  const tr = p.recent_trades.length ? `<table>
+    <tr><th class="l" colspan="2">銘柄</th><th class="l">決済</th><th>方向</th><th>手取り</th><th class="l">理由</th></tr>
+    ${p.recent_trades.map(t => `<tr>
+      <td class="l" style="padding-right:0">${spriteImg(t.symbol, t.prop, false, 'mini')}</td>
+      <td class="l">${t.symbol}</td><td class="l num">${t.exit_ts.slice(5)}</td>
+      <td>${t.direction}</td>
+      <td class="num ${t.net_pnl >= 0 ? 'up' : 'down'}">${t.net_pnl >= 0 ? '+' : ''}${t.net_pnl.toFixed(1)}</td>
+      <td class="l">${t.reason}</td></tr>`).join('')}</table>` : '';
+
+  return `<button class="back" id="back">◀ もどる</button>
+  <div class="win head2">
+    <span>${spriteImg(p.name, p.prop, p.eliminated, 'sprite')}</span>
+    <span>
+      <div class="cname" style="font-size:19px">${esc(p.name)}</div>
+      <div class="money">${yen(p.equity_jpy)}</div>${chg(p.return_pct)}
+      ${p.eliminated ? `<div class="tag dead">たおれた ${p.eliminated_at || ''}</div>` : ''}
+    </span>
+  </div>
+  <div class="win"><h3 class="sec">STATUS</h3>
+    ${p.is_benchmark ? '' : `<div class="kv"><span>${term('HP')}</span><b>${Math.round(p.hp)}%</b></div>
+    <div class="kv"><span>${term('レベル（取引回数）', 'Lv')}</span><b>${p.level}${p.judgeable ? '' : ' ⚠判定不能'}</b></div>`}
+    <div class="kv"><span>${term('最大ドローダウン', 'ドローダウン')}</span><b>${p.max_drawdown_pct}%</b></div>
+    <div class="kv"><span>${term('対 基準線', 'SPY君')}</span><b>${p.vs_benchmark_pt > 0 ? '+' : ''}${p.vs_benchmark_pt}pt</b></div>
+    ${sparkline(p.equity_curve)}
+  </div>
+  ${p.is_benchmark ? '' : `
+  <div class="win"><h3 class="sec">PROFIT / COST</h3>
+    <div class="kv"><span>${term('勝率')}</span><b>${p.win_rate}%</b></div>
+    <div class="kv"><span>${term('損益比（利益÷損失）', '損益比')}</span><b>${p.payoff_ratio ?? '∞'}</b></div>
+    <div class="kv"><span>1回あたり純利益</span><b class="${p.avg_net >= 0 ? 'up' : 'down'}">${p.avg_net >= 0 ? '+' : ''}${p.avg_net}ドル</b></div>
+    <div class="kv"><span>${term('1回あたりコスト', 'コスト')}</span><b>${p.avg_cost}ドル</b></div>
+    <div class="kv"><span>${term('利益÷コスト')}</span><b class="${p.cost_warning ? 'down' : 'up'}">${p.cost_multiple ?? '∞'}倍</b></div>
+    ${p.cost_warning ? `<p class="note">⚠ ${STATE.meta.cost_multiple_warning}倍未満です。値動きで稼いだ分を
+      コストが食べてしまっている状態で、実戦では勝てません。</p>` : ''}
+  </div>
+  <div class="win"><h3 class="sec">REGIME</h3>${rg || '<p class="note">まだ取引がありません。</p>'}
+    ${p.regime_warning ? '<p class="note">⚠ 一つの局面でしか勝てていません。相場が変わると崩れる可能性があります。</p>' : ''}
+  </div>`}
+  <div class="win"><h3 class="sec">HYPOTHESIS</h3><div class="hypo">${esc(p.hypothesis)}</div>
+    <p class="note">パラメータ: ${esc(JSON.stringify(p.params))}</p></div>
+  ${tr ? `<div class="win"><h3 class="sec">RECENT TRADES</h3>${tr}</div>` : ''}`;
+}
+
+function render(){
+  const titles = {party:'PARTY', book:'SYMBOL BOOK', rank:'RANKING', info:'INFO', detail:'STATUS'};
+  document.getElementById('title').textContent = titles[DETAIL !== null ? 'detail' : TAB];
+  document.getElementById('asof').textContent = STATE ? (STATE.meta.end || '') : '';
+  const view = document.getElementById('view');
+  if(!STATE){
+    view.innerHTML = '<div class="win"><p class="center">データがありません。<br>先に検証を実行してください。</p></div>';
+    return;
+  }
+  view.innerHTML = DETAIL !== null ? viewDetail()
+    : ({party:viewParty, book:viewBook, rank:viewRank, info:viewInfo}[TAB])();
+  view.scrollTop = 0;
+  document.querySelectorAll('nav button').forEach(b =>
+    b.setAttribute('aria-current', String(b.dataset.tab === TAB && DETAIL === null)));
+  view.querySelectorAll('.card').forEach(c => c.onclick = () => { DETAIL = Number(c.dataset.i); render(); });
+  const back = document.getElementById('back');
+  if(back) back.onclick = () => { DETAIL = null; render(); };
+}
+
+document.querySelectorAll('nav button').forEach(b =>
+  b.onclick = () => { TAB = b.dataset.tab; DETAIL = null; render(); });
+document.getElementById('gloss').onclick = () => { document.getElementById('gloss').hidden = true; };
+
+STATE = {"generated_at": "2026-08-28 02:41", "meta": {"start": "2024-08-26", "end": "2026-02-22", "execution_level": 2, "data_sources": ["alpaca"], "symbols": 52, "symbol_list": ["AAPL", "ABBV", "ADBE", "AMD", "AMZN", "AVGO", "AXP", "BA", "BAC", "C", "CAT", "COP", "COST", "CRM", "CSCO", "CVX", "DIS", "GOOGL", "GS", "HD", "IBM", "INTC", "JNJ", "JPM", "LLY", "MA", "MCD", "META", "MRK", "MS", "MSFT", "MU", "NFLX", "NKE", "NVDA", "ORCL", "OXY", "PFE", "QCOM", "QQQ", "SBUX", "SCHW", "SLB", "SPY", "TSLA", "TXN", "UBER", "UNH", "V", "WFC", "WMT", "XOM"], "forced_closes": 52, "period": "作成期間", "elapsed_sec": 48.5, "usdjpy": 154.0, "min_trades": 100, "cost_multiple_warning": 3.0, "is_synthetic": false, "unseal_limit": 1, "initial_jpy": 1001000, "snapshot": true}, "party": [{"rank": 1, "name": "SPY君(基準線)", "hypothesis": "米国株式市場は長期的には上昇してきた。何も判断せずS&P500を持ち続けるだけで\n    得られるこの成績が、あらゆる戦略の最低ライン(超えるべき壁)になる。", "params": {"symbol": "SPY"}, "prop": "crown", "buddy": null, "buddy_prop": null, "buddy_trades": 0, "is_benchmark": true, "eliminated": false, "eliminated_at": null, "equity_usd": 7986.1, "equity_jpy": 1229860, "return_pct": 22.86, "vs_benchmark_pt": 0.0, "hp": 94.4, "max_drawdown_pct": 19.75, "level": 0, "judgeable": false, "win_rate": 0.0, "payoff_ratio": 0.0, "avg_net": 0.0, "avg_cost": 0.0, "cost_multiple": 0.0, "total_gross": 0.0, "total_cost": 0.0, "cost_warning": false, "regime_warning": false, "promoted": false, "regimes": {}, "equity_curve": [["2024-08-26", 6468.43], ["2024-08-27", 6476.79], ["2024-08-28", 6442.25], ["2024-08-29", 6441.81], ["2024-08-30", 6498.35], ["2024-09-03", 6375.81], ["2024-09-04", 6361.51], ["2024-09-05", 6346.55], ["2024-09-06", 6250.08], ["2024-09-09", 6314.32], ["2024-09-10", 6339.29], ["2024-09-11", 6398.03], ["2024-09-12", 6449.95], ["2024-09-13", 6480.31], ["2024-09-16", 6490.87], ["2024-09-17", 6493.84], ["2024-09-18", 6474.92], ["2024-09-19", 6578.1], ["2024-09-20", 6565.01], ["2024-09-23", 6581.95], ["2024-09-24", 6599.66], ["2024-09-25", 6586.13], ["2024-09-26", 6609.67], ["2024-09-27", 6601.31], ["2024-09-30", 6629.8], ["2024-10-01", 6571.28], ["2024-10-02", 6573.59], ["2024-10-03", 6562.15], ["2024-10-04", 6617.92], ["2024-10-07", 6562.48], ["2024-10-08", 6620.67], ["2024-10-09", 6662.47], ["2024-10-10", 6653.12], ["2024-10-11", 6689.75], ["2024-10-14", 6740.46], ["2024-10-15", 6693.16], ["2024-10-16", 6718.46], ["2024-10-17", 6719.01], ["2024-10-18", 6743.65], ["2024-10-21", 6734.08], ["2024-10-22", 6729.9], ["2024-10-23", 6672.92], ["2024-10-24", 6685.68], ["2024-10-25", 6683.37], ["2024-10-28", 6702.29], ["2024-10-29", 6712.3], ["2024-10-30", 6693.71], ["2024-10-31", 6569.63], ["2024-11-01", 6597.35], ["2024-11-04", 6583.82], ["2024-11-05", 6658.4], ["2024-11-06", 6812.73], ["2024-11-07", 6863.77], ["2024-11-08", 6890.72], ["2024-11-11", 6896.77], ["2024-11-12", 6876.31], ["2024-11-13", 6879.61], ["2024-11-14", 6838.69], ["2024-11-15", 6755.86], ["2024-11-18", 6782.48], ["2024-11-19", 6803.82], ["2024-11-20", 6807.12], ["2024-11-21", 6841.33], ["2024-11-22", 6861.13], ["2024-11-25", 6882.58], ["2024-11-26", 6917.45], ["2024-11-27", 6895.34], ["2024-11-29", 6933.73], ["2024-12-02", 6949.13], ["2024-12-03", 6951.33], ["2024-12-04", 6991.7], ["2024-12-05", 6981.69], ["2024-12-06", 6994.67], ["2024-12-09", 6959.69], ["2024-12-10", 6940.88], ["2024-12-11", 6991.15], ["2024-12-12", 6956.94], ["2024-12-13", 6955.51], ["2024-12-16", 6983.34], ["2024-12-17", 6955.29], ["2024-12-18", 6762.9], ["2024-12-19", 6760.04], ["2024-12-20", 6833.3], ["2024-12-23", 6813.06], ["2024-12-24", 6944.95], ["2024-12-26", 6943.96], ["2024-12-27", 6877.19], ["2024-12-30", 6804.26], ["2024-12-31", 6780.72], ["2025-01-02", 6764.99], ["2025-01-03", 6844.19], ["2025-01-06", 6881.81], ["2025-01-07", 6809.43], ["2025-01-08", 6816.03], ["2025-01-10", 6720.33], ["2025-01-13", 6730.34], ["2025-01-14", 6738.81], ["2025-01-15", 6852.99], ["2025-01-16", 6841.55], ["2025-01-17", 6905.79], ["2025-01-21", 6962.88], ["2025-01-22", 6999.84], ["2025-01-23", 7035.48], ["2025-01-24", 7017.0], ["2025-01-27", 6925.81], ["2025-01-28", 6980.04], ["2025-01-29", 6951.0], ["2025-01-30", 6983.01], ["2025-01-31", 6950.67], ["2025-02-03", 6906.45], ["2025-02-04", 6950.12], ["2025-02-05", 6976.08], ["2025-02-06", 6998.85], ["2025-02-07", 6940.22], ["2025-02-10", 6983.67], ["2025-02-11", 6987.96], ["2025-02-12", 6966.84], ["2025-02-13", 7036.14], ["2025-02-14", 7034.82], ["2025-02-18", 7054.18], ["2025-02-19", 7071.34], ["2025-02-20", 7043.95], ["2025-02-21", 6931.53], ["2025-02-24", 6901.28], ["2025-02-25", 6869.82], ["2025-02-26", 6871.8], ["2025-02-27", 6769.5], ["2025-02-28", 6865.31], ["2025-03-03", 6757.62], ["2025-03-04", 6681.28], ["2025-03-05", 6747.72], ["2025-03-06", 6636.4], ["2025-03-07", 6669.18], ["2025-03-11", 6456.33], ["2025-03-12", 6487.13], ["2025-03-13", 6407.93], ["2025-03-14", 6528.82], ["2025-03-17", 6574.69], ["2025-03-18", 6508.69], ["2025-03-19", 6574.47], ["2025-03-20", 6560.28], ["2025-03-21", 6562.26], ["2025-03-24", 6669.07], ["2025-03-25", 6684.03], ["2025-03-26", 6611.87], ["2025-03-27", 6593.28], ["2025-03-28", 6470.3], ["2025-03-31", 6508.91], ["2025-04-01", 6528.93], ["2025-04-02", 6567.21], ["2025-04-03", 6270.76], ["2025-04-04", 5930.53], ["2025-04-07", 5914.47], ["2025-04-08", 5829.33], ["2025-04-09", 6332.14], ["2025-04-10", 6133.37], ["2025-04-11", 6235.01], ["2025-04-14", 6289.02], ["2025-04-15", 6274.5], ["2025-04-16", 6145.25], ["2025-04-17", 6151.85], ["2025-04-21", 6017.65], ["2025-04-22", 6158.45], ["2025-04-23", 6248.98], ["2025-04-24", 6369.87], ["2025-04-25", 6414.53], ["2025-04-28", 6420.14], ["2025-04-29", 6452.92], ["2025-04-30", 6452.15], ["2025-05-01", 6499.67], ["2025-05-02", 6588.11], ["2025-05-05", 6555.66], ["2025-05-06", 6503.19], ["2025-05-07", 6529.92], ["2025-05-08", 6570.95], ["2025-05-09", 6561.93], ["2025-05-12", 6765.76], ["2025-05-13", 6807.23], ["2025-05-14", 6814.71], ["2025-05-15", 6846.83], ["2025-05-16", 6888.85], ["2025-05-19", 6895.34], ["2025-05-20", 6873.67], ["2025-05-21", 6765.98], ["2025-05-22", 6767.08], ["2025-05-23", 6725.28], ["2025-05-27", 6853.87], ["2025-05-28", 6818.56], ["2025-05-29", 6841.88], ["2025-05-30", 6834.84], ["2025-06-02", 6872.68], ["2025-06-03", 6908.76], ["2025-06-04", 6907.22], ["2025-06-05", 6875.76], ["2025-06-06", 6939.78], ["2025-06-09", 6944.73], ["2025-06-10", 6984.44], ["2025-06-11", 6968.16], ["2025-06-12", 6991.26], ["2025-06-13", 6915.91], ["2025-06-16", 6980.15], ["2025-06-17", 6924.82], ["2025-06-18", 6923.94], ["2025-06-20", 6906.78], ["2025-06-23", 6971.02], ["2025-06-24", 7043.51], ["2025-06-25", 7048.46], ["2025-06-26", 7099.72], ["2025-06-27", 7131.4], ["2025-06-30", 7164.07], ["2025-07-01", 7161.98], ["2025-07-02", 7192.34], ["2025-07-03", 7242.39], ["2025-07-07", 7198.5], ["2025-07-08", 7190.8], ["2025-07-09", 7231.61], ["2025-07-10", 7252.51], ["2025-07-11", 7227.32], ["2025-07-14", 7238.87], ["2025-07-15", 7211.48], ["2025-07-16", 7233.7], ["2025-07-17", 7274.51], ["2025-07-18", 7270.22], ["2025-07-21", 7282.65], ["2025-07-22", 7283.2], ["2025-07-23", 7341.72], ["2025-07-24", 7345.35], ["2025-07-25", 7372.85], ["2025-07-28", 7372.08], ["2025-07-29", 7353.71], ["2025-07-30", 7346.12], ["2025-07-31", 7317.19], ["2025-08-01", 7206.64], ["2025-08-04", 7308.06], ["2025-08-05", 7274.95], ["2025-08-06", 7325.88], ["2025-08-07", 7322.14], ["2025-08-08", 7375.49], ["2025-08-11", 7360.2], ["2025-08-12", 7433.9], ["2025-08-13", 7458.76], ["2025-08-14", 7458.54], ["2025-08-15", 7443.58], ["2025-08-18", 7440.17], ["2025-08-19", 7402.55], ["2025-08-20", 7382.64], ["2025-08-21", 7357.67], ["2025-08-22", 7463.05], ["2025-08-25", 7433.02], ["2025-08-26", 7461.4], ["2025-08-27", 7477.13], ["2025-08-28", 7502.54], ["2025-08-29", 7459.64], ["2025-09-02", 7409.59], ["2025-09-03", 7444.46], ["2025-09-04", 7503.42], ["2025-09-05", 7483.84], ["2025-09-08", 7500.78], ["2025-09-09", 7516.84], ["2025-09-10", 7538.84], ["2025-09-11", 7596.15], ["2025-09-12", 7596.04], ["2025-09-15", 7632.12], ["2025-09-16", 7622.11], ["2025-09-17", 7615.84], ["2025-09-18", 7647.41], ["2025-09-19", 7681.4], ["2025-09-22", 7716.93], ["2025-09-23", 7678.32], ["2025-09-24", 7654.45], ["2025-09-25", 7618.59], ["2025-09-26", 7662.15], ["2025-09-29", 7682.61], ["2025-09-30", 7708.9], ["2025-10-01", 7735.85], ["2025-10-02", 7742.56], ["2025-10-03", 7743.22], ["2025-10-06", 7769.18], ["2025-10-07", 7742.45], ["2025-10-08", 7785.24], ["2025-10-09", 7764.78], ["2025-10-10", 7569.42], ["2025-10-13", 7676.23], ["2025-10-14", 7667.32], ["2025-10-15", 7698.12], ["2025-10-16", 7651.37], ["2025-10-17", 7689.65], ["2025-10-20", 7765.66], ["2025-10-21", 7765.55], ["2025-10-22", 7728.04], ["2025-10-23", 7768.52], ["2025-10-24", 7829.24], ["2025-10-27", 7917.79], ["2025-10-28", 7936.93], ["2025-10-29", 7940.78], ["2025-10-30", 7862.02], ["2025-10-31", 7883.03], ["2025-11-03", 7897.66], ["2025-11-04", 7809.77], ["2025-11-05", 7833.53], ["2025-11-06", 7754.44], ["2025-11-07", 7761.92], ["2025-11-10", 7875.22], ["2025-11-11", 7892.6], ["2025-11-12", 7897.11], ["2025-11-13", 7774.46], ["2025-11-14", 7772.92], ["2025-11-17", 7705.16], ["2025-11-18", 7644.44], ["2025-11-19", 7671.94], ["2025-11-20", 7560.07], ["2025-11-21", 7633.44], ["2025-11-24", 7738.93], ["2025-11-25", 7806.36], ["2025-11-26", 7856.96], ["2025-11-28", 7893.81], ["2025-12-01", 7863.67], ["2025-12-02", 7876.65], ["2025-12-03", 7902.5], ["2025-12-04", 7909.98], ["2025-12-05", 7922.19], ["2025-12-08", 7901.07], ["2025-12-09", 7894.03], ["2025-12-10", 7943.75], ["2025-12-11", 7960.8], ["2025-12-12", 7880.61], ["2025-12-15", 7868.73], ["2025-12-16", 7848.49], ["2025-12-17", 7767.42], ["2025-12-18", 7822.86], ["2025-12-19", 7888.53], ["2025-12-22", 7934.4], ["2025-12-23", 7969.38], ["2025-12-24", 7993.47], ["2025-12-26", 7995.12], ["2025-12-29", 7970.15], ["2025-12-30", 7958.71], ["2025-12-31", 7902.72], ["2026-01-02", 7919.33], ["2026-01-05", 7967.4], ["2026-01-06", 8012.06], ["2026-01-07", 7988.3], ["2026-01-08", 7986.1], ["2026-01-09", 8036.04], ["2026-01-12", 8049.02], ["2026-01-13", 8032.85], ["2026-01-14", 7999.08], ["2026-01-15", 8016.13], ["2026-01-16", 8009.53], ["2026-01-20", 7857.29], ["2026-01-21", 7941.33], ["2026-01-22", 7980.93], ["2026-01-23", 7983.46], ["2026-01-26", 8022.4], ["2026-01-27", 8052.76], ["2026-01-28", 8051.22], ["2026-01-29", 8035.6], ["2026-01-30", 8011.95], ["2026-02-02", 8051.22], ["2026-02-03", 7986.1], ["2026-02-04", 7949.58], ["2026-02-05", 7854.87], ["2026-02-06", 8000.18], ["2026-02-09", 8036.04], ["2026-02-10", 8015.36], ["2026-02-11", 8012.06], ["2026-02-12", 7895.9], ["2026-02-13", 7900.52], ["2026-02-17", 7913.06], ["2026-02-18", 7950.57], ["2026-02-19", 7932.09], ["2026-02-20", 7986.1]], "recent_trades": [], "unseal_count": 0}, {"rank": 2, "name": "前日大陽線の翌朝", "hypothesis": "前日に大きく上げた銘柄は、翌朝の板に「乗り遅れた買い」と「利益確定の売り」が\n    同時に集まる。どちらが勝つかは寄り付き直後の数分の値動きに表れる、と考える。\n    寄り付き後に上げ続けるなら買いが勝っている(順張り)、\n    早々に崩れるなら利益確定が勝っている(戻り売り)。\n    前日の材料に反応する銘柄だけを対象にするので、対象は毎朝ごく少数になる。", "params": {"prev_gain_pct": 4.0, "entry_min": 5, "stop_pct": 0.8, "take_pct": 1.5, "alloc_pct": 0.15}, "prop": "sun", "buddy": "TSLA", "buddy_prop": "car", "buddy_trades": 25, "is_benchmark": false, "eliminated": false, "eliminated_at": null, "equity_usd": 6004.28, "equity_jpy": 924659, "return_pct": -7.63, "vs_benchmark_pt": -30.5, "hp": 60.2, "max_drawdown_pct": 7.97, "level": 193, "judgeable": true, "win_rate": 35.8, "payoff_ratio": 1.07, "avg_net": -2.568, "avg_cost": 2.023, "cost_multiple": -1.27, "total_gross": -105.19, "total_cost": 390.53, "cost_warning": true, "regime_warning": false, "promoted": false, "regimes": {"up": {"trades": 58, "net_pnl": -186.94, "win_rate": 34.5}, "down": {"trades": 71, "net_pnl": -129.88, "win_rate": 38.0}, "flat": {"trades": 64, "net_pnl": -178.9, "win_rate": 34.4}}, "equity_curve": [["2024-08-26", 6500.0], ["2024-08-27", 6500.0], ["2024-08-28", 6500.0], ["2024-08-29", 6500.0], ["2024-08-30", 6500.0], ["2024-09-03", 6500.0], ["2024-09-04", 6500.0], ["2024-09-05", 6509.53], ["2024-09-06", 6509.53], ["2024-09-09", 6509.53], ["2024-09-10", 6509.53], ["2024-09-11", 6521.88], ["2024-09-12", 6499.04], ["2024-09-13", 6499.04], ["2024-09-16", 6499.04], ["2024-09-17", 6485.26], ["2024-09-18", 6485.26], ["2024-09-19", 6485.26], ["2024-09-20", 6475.25], ["2024-09-23", 6461.96], ["2024-09-24", 6461.96], ["2024-09-25", 6461.96], ["2024-09-26", 6461.96], ["2024-09-27", 6461.96], ["2024-09-30", 6461.96], ["2024-10-01", 6461.96], ["2024-10-02", 6473.9], ["2024-10-03", 6473.9], ["2024-10-04", 6473.9], ["2024-10-07", 6473.9], ["2024-10-08", 6473.9], ["2024-10-09", 6461.82], ["2024-10-10", 6461.82], ["2024-10-11", 6463.36], ["2024-10-14", 6464.8], ["2024-10-15", 6464.8], ["2024-10-16", 6464.8], ["2024-10-17", 6464.8], ["2024-10-18", 6464.8], ["2024-10-21", 6464.8], ["2024-10-22", 6455.4], ["2024-10-23", 6455.4], ["2024-10-24", 6469.22], ["2024-10-25", 6481.5], ["2024-10-28", 6473.34], ["2024-10-29", 6473.34], ["2024-10-30", 6464.52], ["2024-10-31", 6448.15], ["2024-11-01", 6448.15], ["2024-11-04", 6448.15], ["2024-11-05", 6448.15], ["2024-11-06", 6448.15], ["2024-11-07", 6456.79], ["2024-11-08", 6456.79], ["2024-11-11", 6446.33], ["2024-11-12", 6456.77], ["2024-11-13", 6464.18], ["2024-11-14", 6464.18], ["2024-11-15", 6464.18], ["2024-11-18", 6464.18], ["2024-11-19", 6464.18], ["2024-11-20", 6476.59], ["2024-11-21", 6476.59], ["2024-11-22", 6476.59], ["2024-11-25", 6476.59], ["2024-11-26", 6476.59], ["2024-11-27", 6476.59], ["2024-11-29", 6476.59], ["2024-12-02", 6476.59], ["2024-12-03", 6476.59], ["2024-12-04", 6476.59], ["2024-12-05", 6476.59], ["2024-12-06", 6476.59], ["2024-12-09", 6467.86], ["2024-12-10", 6467.86], ["2024-12-11", 6467.86], ["2024-12-12", 6473.65], ["2024-12-13", 6461.71], ["2024-12-16", 6475.36], ["2024-12-17", 6475.27], ["2024-12-18", 6475.27], ["2024-12-19", 6475.27], ["2024-12-20", 6475.27], ["2024-12-23", 6466.03], ["2024-12-24", 6466.03], ["2024-12-26", 6455.59], ["2024-12-27", 6455.59], ["2024-12-30", 6455.59], ["2024-12-31", 6455.59], ["2025-01-02", 6455.59], ["2025-01-03", 6455.59], ["2025-01-06", 6466.23], ["2025-01-07", 6466.23], ["2025-01-08", 6466.23], ["2025-01-10", 6466.23], ["2025-01-13", 6466.23], ["2025-01-14", 6457.25], ["2025-01-15", 6457.25], ["2025-01-16", 6468.26], ["2025-01-17", 6468.26], ["2025-01-21", 6458.07], ["2025-01-22", 6446.95], ["2025-01-23", 6446.95], ["2025-01-24", 6446.95], ["2025-01-27", 6446.95], ["2025-01-28", 6443.75], ["2025-01-29", 6433.36], ["2025-01-30", 6427.01], ["2025-01-31", 6416.99], ["2025-02-03", 6416.99], ["2025-02-04", 6416.99], ["2025-02-05", 6416.99], ["2025-02-06", 6406.04], ["2025-02-07", 6420.93], ["2025-02-10", 6411.12], ["2025-02-11", 6411.12], ["2025-02-12", 6395.77], ["2025-02-13", 6381.67], ["2025-02-14", 6396.1], ["2025-02-18", 6396.1], ["2025-02-19", 6367.46], ["2025-02-20", 6367.46], ["2025-02-21", 6367.46], ["2025-02-24", 6360.02], ["2025-02-25", 6360.02], ["2025-02-26", 6360.02], ["2025-02-27", 6360.02], ["2025-02-28", 6360.02], ["2025-03-03", 6343.79], ["2025-03-04", 6343.79], ["2025-03-05", 6323.09], ["2025-03-06", 6323.09], ["2025-03-07", 6323.09], ["2025-03-11", 6316.46], ["2025-03-12", 6316.46], ["2025-03-13", 6316.46], ["2025-03-14", 6316.46], ["2025-03-17", 6316.46], ["2025-03-18", 6330.89], ["2025-03-19", 6330.89], ["2025-03-20", 6335.5], ["2025-03-21", 6335.5], ["2025-03-24", 6346.53], ["2025-03-25", 6357.6], ["2025-03-26", 6357.6], ["2025-03-27", 6357.6], ["2025-03-28", 6357.6], ["2025-03-31", 6357.6], ["2025-04-01", 6349.14], ["2025-04-02", 6349.14], ["2025-04-03", 6343.38], ["2025-04-04", 6355.29], ["2025-04-07", 6336.73], ["2025-04-08", 6340.77], ["2025-04-09", 6340.77], ["2025-04-10", 6346.04], ["2025-04-11", 6346.04], ["2025-04-14", 6362.9], ["2025-04-15", 6362.9], ["2025-04-16", 6362.9], ["2025-04-17", 6362.9], ["2025-04-21", 6362.9], ["2025-04-22", 6362.9], ["2025-04-23", 6362.9], ["2025-04-24", 6362.9], ["2025-04-25", 6366.96], ["2025-04-28", 6355.83], ["2025-04-29", 6355.83], ["2025-04-30", 6355.83], ["2025-05-01", 6348.19], ["2025-05-02", 6348.19], ["2025-05-05", 6348.19], ["2025-05-06", 6348.19], ["2025-05-07", 6348.19], ["2025-05-08", 6348.19], ["2025-05-09", 6348.19], ["2025-05-12", 6348.19], ["2025-05-13", 6340.8], ["2025-05-14", 6329.92], ["2025-05-15", 6329.92], ["2025-05-16", 6329.92], ["2025-05-19", 6320.66], ["2025-05-20", 6320.66], ["2025-05-21", 6320.66], ["2025-05-22", 6320.66], ["2025-05-23", 6320.66], ["2025-05-27", 6320.66], ["2025-05-28", 6329.09], ["2025-05-29", 6329.09], ["2025-05-30", 6329.09], ["2025-06-02", 6329.09], ["2025-06-03", 6329.59], ["2025-06-04", 6329.59], ["2025-06-05", 6329.59], ["2025-06-06", 6329.59], ["2025-06-09", 6329.59], ["2025-06-10", 6319.37], ["2025-06-11", 6333.12], ["2025-06-12", 6333.12], ["2025-06-13", 6343.33], ["2025-06-16", 6333.77], ["2025-06-17", 6321.51], ["2025-06-18", 6321.51], ["2025-06-20", 6321.51], ["2025-06-23", 6321.51], ["2025-06-24", 6331.83], ["2025-06-25", 6321.56], ["2025-06-26", 6321.56], ["2025-06-27", 6321.56], ["2025-06-30", 6312.35], ["2025-07-01", 6312.35], ["2025-07-02", 6313.9], ["2025-07-03", 6293.74], ["2025-07-07", 6293.74], ["2025-07-08", 6293.74], ["2025-07-09", 6269.83], ["2025-07-10", 6269.83], ["2025-07-11", 6269.83], ["2025-07-14", 6269.83], ["2025-07-15", 6269.83], ["2025-07-16", 6269.83], ["2025-07-17", 6269.83], ["2025-07-18", 6269.83], ["2025-07-21", 6269.83], ["2025-07-22", 6269.83], ["2025-07-23", 6260.44], ["2025-07-24", 6260.44], ["2025-07-25", 6260.44], ["2025-07-28", 6260.44], ["2025-07-29", 6260.44], ["2025-07-30", 6260.44], ["2025-07-31", 6260.44], ["2025-08-01", 6260.44], ["2025-08-04", 6260.44], ["2025-08-05", 6260.44], ["2025-08-06", 6250.37], ["2025-08-07", 6250.37], ["2025-08-08", 6250.37], ["2025-08-11", 6240.39], ["2025-08-12", 6240.39], ["2025-08-13", 6242.24], ["2025-08-14", 6242.24], ["2025-08-15", 6228.88], ["2025-08-18", 6228.88], ["2025-08-19", 6228.88], ["2025-08-20", 6228.88], ["2025-08-21", 6228.88], ["2025-08-22", 6228.88], ["2025-08-25", 6210.59], ["2025-08-26", 6210.59], ["2025-08-27", 6210.59], ["2025-08-28", 6210.59], ["2025-08-29", 6210.59], ["2025-09-02", 6210.59], ["2025-09-03", 6210.59], ["2025-09-04", 6210.59], ["2025-09-05", 6200.81], ["2025-09-08", 6200.81], ["2025-09-09", 6200.81], ["2025-09-10", 6194.07], ["2025-09-11", 6203.54], ["2025-09-12", 6214.4], ["2025-09-15", 6204.11], ["2025-09-16", 6204.11], ["2025-09-17", 6193.79], ["2025-09-18", 6193.79], ["2025-09-19", 6185.17], ["2025-09-22", 6185.17], ["2025-09-23", 6208.93], ["2025-09-24", 6208.93], ["2025-09-25", 6192.16], ["2025-09-26", 6178.64], ["2025-09-29", 6178.64], ["2025-09-30", 6178.64], ["2025-10-01", 6192.56], ["2025-10-02", 6174.31], ["2025-10-03", 6187.75], ["2025-10-06", 6187.75], ["2025-10-07", 6187.75], ["2025-10-08", 6187.75], ["2025-10-09", 6179.4], ["2025-10-10", 6179.4], ["2025-10-13", 6179.4], ["2025-10-14", 6179.4], ["2025-10-15", 6167.41], ["2025-10-16", 6158.75], ["2025-10-17", 6158.75], ["2025-10-20", 6151.65], ["2025-10-21", 6151.65], ["2025-10-22", 6151.65], ["2025-10-23", 6142.61], ["2025-10-24", 6177.85], ["2025-10-27", 6169.11], ["2025-10-28", 6158.19], ["2025-10-29", 6140.12], ["2025-10-30", 6140.12], ["2025-10-31", 6140.12], ["2025-11-03", 6140.12], ["2025-11-04", 6140.12], ["2025-11-05", 6140.12], ["2025-11-06", 6152.26], ["2025-11-07", 6152.26], ["2025-11-10", 6152.26], ["2025-11-11", 6152.26], ["2025-11-12", 6143.01], ["2025-11-13", 6143.01], ["2025-11-14", 6143.01], ["2025-11-17", 6142.14], ["2025-11-18", 6142.14], ["2025-11-19", 6142.14], ["2025-11-20", 6142.14], ["2025-11-21", 6142.14], ["2025-11-24", 6142.14], ["2025-11-25", 6144.01], ["2025-11-26", 6146.47], ["2025-11-28", 6146.47], ["2025-12-01", 6135.69], ["2025-12-02", 6135.69], ["2025-12-03", 6124.31], ["2025-12-04", 6133.04], ["2025-12-05", 6133.04], ["2025-12-08", 6132.21], ["2025-12-09", 6132.21], ["2025-12-10", 6132.21], ["2025-12-11", 6143.57], ["2025-12-12", 6134.44], ["2025-12-15", 6134.44], ["2025-12-16", 6134.44], ["2025-12-17", 6134.44], ["2025-12-18", 6134.44], ["2025-12-19", 6134.44], ["2025-12-22", 6126.56], ["2025-12-23", 6124.81], ["2025-12-24", 6124.81], ["2025-12-26", 6124.81], ["2025-12-29", 6124.81], ["2025-12-30", 6115.05], ["2025-12-31", 6115.05], ["2026-01-02", 6115.05], ["2026-01-05", 6087.16], ["2026-01-06", 6087.16], ["2026-01-07", 6078.81], ["2026-01-08", 6091.44], ["2026-01-09", 6093.21], ["2026-01-12", 6082.75], ["2026-01-13", 6082.75], ["2026-01-14", 6082.75], ["2026-01-15", 6082.75], ["2026-01-16", 6074.71], ["2026-01-20", 6074.71], ["2026-01-21", 6074.71], ["2026-01-22", 6055.32], ["2026-01-23", 6055.32], ["2026-01-26", 6055.32], ["2026-01-27", 6055.32], ["2026-01-28", 6055.32], ["2026-01-29", 6034.21], ["2026-01-30", 6034.21], ["2026-02-02", 6034.21], ["2026-02-03", 6016.56], ["2026-02-04", 6016.56], ["2026-02-05", 6015.79], ["2026-02-06", 6026.86], ["2026-02-09", 6036.0], ["2026-02-10", 6012.0], ["2026-02-11", 6012.0], ["2026-02-12", 6012.0], ["2026-02-13", 6012.0], ["2026-02-17", 6012.0], ["2026-02-18", 6012.0], ["2026-02-19", 6004.28], ["2026-02-20", 6004.28]], "recent_trades": [{"symbol": "MU", "prop": "chip", "entry_ts": "2026-02-19 09:36", "exit_ts": "2026-02-19 10:04", "direction": "空売り", "qty": 2, "entry_price": 412.96, "exit_price": 416.08, "gross_pnl": -6.24, "cost": 1.48, "net_pnl": -7.72, "reason": "損切り"}, {"symbol": "AMD", "prop": "chip", "entry_ts": "2026-02-10 09:36", "exit_ts": "2026-02-10 09:39", "direction": "買い", "qty": 4, "entry_price": 219.35, "exit_price": 216.86, "gross_pnl": -9.96, "cost": 2.6, "net_pnl": -12.56, "reason": "損切り"}, {"symbol": "ORCL", "prop": "laptop", "entry_ts": "2026-02-10 09:36", "exit_ts": "2026-02-10 09:38", "direction": "買い", "qty": 5, "entry_price": 159.08, "exit_price": 157.35, "gross_pnl": -8.65, "cost": 2.79, "net_pnl": -11.44, "reason": "損切り"}, {"symbol": "NVDA", "prop": "chip", "entry_ts": "2026-02-09 09:36", "exit_ts": "2026-02-09 09:46", "direction": "買い", "qty": 4, "entry_price": 187.97, "exit_price": 190.8, "gross_pnl": 11.32, "cost": 2.19, "net_pnl": 9.13, "reason": "利確"}, {"symbol": "AMD", "prop": "chip", "entry_ts": "2026-02-09 09:36", "exit_ts": "2026-02-09 09:46", "direction": "買い", "qty": 4, "entry_price": 207.64, "exit_price": 211.025, "gross_pnl": 13.54, "cost": 3.73, "net_pnl": 9.81, "reason": "利確"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2026-02-09 09:36", "exit_ts": "2026-02-09 09:40", "direction": "空売り", "qty": 2, "entry_price": 373.28, "exit_price": 377.29, "gross_pnl": -8.02, "cost": 1.79, "net_pnl": -9.81, "reason": "損切り"}, {"symbol": "GOOGL", "prop": "globe", "entry_ts": "2026-02-06 09:36", "exit_ts": "2026-02-06 10:13", "direction": "空売り", "qty": 2, "entry_price": 325.89, "exit_price": 320.03, "gross_pnl": 11.72, "cost": 0.65, "net_pnl": 11.07, "reason": "利確"}, {"symbol": "NKE", "prop": "shoe", "entry_ts": "2026-02-05 09:36", "exit_ts": "2026-02-05 10:29", "direction": "空売り", "qty": 14, "entry_price": 62.72, "exit_price": 61.77, "gross_pnl": 13.3, "cost": 2.97, "net_pnl": 10.33, "reason": "利確"}, {"symbol": "ADBE", "prop": "laptop", "entry_ts": "2026-02-05 09:36", "exit_ts": "2026-02-05 09:47", "direction": "買い", "qty": 3, "entry_price": 279.14, "exit_price": 275.82, "gross_pnl": -9.96, "cost": 1.14, "net_pnl": -11.1, "reason": "損切り"}, {"symbol": "TXN", "prop": "chip", "entry_ts": "2026-02-03 09:36", "exit_ts": "2026-02-03 12:29", "direction": "買い", "qty": 4, "entry_price": 224.24, "exit_price": 222.34, "gross_pnl": -7.6, "cost": 1.8, "net_pnl": -9.4, "reason": "損切り"}, {"symbol": "AMD", "prop": "chip", "entry_ts": "2026-02-03 09:36", "exit_ts": "2026-02-03 09:44", "direction": "空売り", "qty": 3, "entry_price": 250.46, "exit_price": 246.04, "gross_pnl": 13.26, "cost": 1.29, "net_pnl": 11.97, "reason": "利確"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2026-02-03 09:36", "exit_ts": "2026-02-03 09:44", "direction": "買い", "qty": 17, "entry_price": 50.495, "exit_price": 50.08, "gross_pnl": -7.05, "cost": 1.97, "net_pnl": -9.02, "reason": "損切り"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2026-02-03 09:36", "exit_ts": "2026-02-03 09:38", "direction": "空売り", "qty": 2, "entry_price": 433.33, "exit_price": 437.1, "gross_pnl": -7.54, "cost": 3.66, "net_pnl": -11.2, "reason": "損切り"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2026-01-29 09:36", "exit_ts": "2026-01-29 10:51", "direction": "買い", "qty": 18, "entry_price": 47.865, "exit_price": 47.31, "gross_pnl": -9.99, "cost": 1.71, "net_pnl": -11.7, "reason": "損切り"}, {"symbol": "TXN", "prop": "chip", "entry_ts": "2026-01-29 09:36", "exit_ts": "2026-01-29 09:52", "direction": "買い", "qty": 4, "entry_price": 215.38, "exit_price": 213.52, "gross_pnl": -7.44, "cost": 1.98, "net_pnl": -9.42, "reason": "損切り"}, {"symbol": "AMD", "prop": "chip", "entry_ts": "2026-01-22 09:36", "exit_ts": "2026-01-22 10:01", "direction": "空売り", "qty": 3, "entry_price": 249.295, "exit_price": 251.685, "gross_pnl": -7.17, "cost": 1.62, "net_pnl": -8.79, "reason": "損切り"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2026-01-22 09:36", "exit_ts": "2026-01-22 09:46", "direction": "空売り", "qty": 17, "entry_price": 53.22, "exit_price": 53.715, "gross_pnl": -8.42, "cost": 2.18, "net_pnl": -10.6, "reason": "損切り"}, {"symbol": "MS", "prop": "coin", "entry_ts": "2026-01-16 09:36", "exit_ts": "2026-01-16 15:15", "direction": "買い", "qty": 4, "entry_price": 188.58, "exit_price": 187.01, "gross_pnl": -6.28, "cost": 1.76, "net_pnl": -8.04, "reason": "損切り"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2026-01-12 09:36", "exit_ts": "2026-01-12 11:43", "direction": "買い", "qty": 20, "entry_price": 44.74, "exit_price": 44.36, "gross_pnl": -7.6, "cost": 2.86, "net_pnl": -10.46, "reason": "損切り"}, {"symbol": "NKE", "prop": "shoe", "entry_ts": "2026-01-09 09:36", "exit_ts": "2026-01-09 09:56", "direction": "買い", "qty": 14, "entry_price": 64.49, "exit_price": 65.52, "gross_pnl": 14.42, "cost": 2.81, "net_pnl": 11.61, "reason": "利確"}, {"symbol": "OXY", "prop": "drum", "entry_ts": "2026-01-09 09:36", "exit_ts": "2026-01-09 09:49", "direction": "空売り", "qty": 21, "entry_price": 42.92, "exit_price": 43.28, "gross_pnl": -7.56, "cost": 2.28, "net_pnl": -9.84, "reason": "損切り"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2026-01-08 09:36", "exit_ts": "2026-01-08 10:00", "direction": "空売り", "qty": 21, "entry_price": 42.525, "exit_price": 41.79, "gross_pnl": 15.43, "cost": 2.81, "net_pnl": 12.63, "reason": "利確"}, {"symbol": "TXN", "prop": "chip", "entry_ts": "2026-01-07 09:36", "exit_ts": "2026-01-07 15:08", "direction": "空売り", "qty": 4, "entry_price": 185.28, "exit_price": 182.31, "gross_pnl": 11.88, "cost": 1.33, "net_pnl": 10.55, "reason": "利確"}, {"symbol": "UBER", "prop": "car", "entry_ts": "2026-01-07 09:36", "exit_ts": "2026-01-07 10:09", "direction": "買い", "qty": 10, "entry_price": 87.44, "exit_price": 86.55, "gross_pnl": -8.9, "cost": 1.93, "net_pnl": -10.83, "reason": "損切り"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2026-01-07 09:36", "exit_ts": "2026-01-07 09:58", "direction": "買い", "qty": 2, "entry_price": 341.96, "exit_price": 338.92, "gross_pnl": -6.08, "cost": 1.99, "net_pnl": -8.07, "reason": "損切り"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2026-01-05 09:36", "exit_ts": "2026-01-05 10:24", "direction": "空売り", "qty": 2, "entry_price": 314.88, "exit_price": 317.48, "gross_pnl": -5.2, "cost": 1.19, "net_pnl": -6.39, "reason": "損切り"}, {"symbol": "SLB", "prop": "wrench", "entry_ts": "2026-01-05 09:36", "exit_ts": "2026-01-05 09:56", "direction": "買い", "qty": 21, "entry_price": 43.05, "exit_price": 42.65, "gross_pnl": -8.4, "cost": 2.56, "net_pnl": -10.96, "reason": "損切り"}, {"symbol": "BA", "prop": "plane", "entry_ts": "2026-01-05 09:36", "exit_ts": "2026-01-05 09:42", "direction": "空売り", "qty": 4, "entry_price": 228.45, "exit_price": 230.64, "gross_pnl": -8.76, "cost": 1.78, "net_pnl": -10.54, "reason": "損切り"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2025-12-30 09:36", "exit_ts": "2025-12-30 10:11", "direction": "買い", "qty": 3, "entry_price": 296.18, "exit_price": 293.46, "gross_pnl": -8.16, "cost": 1.6, "net_pnl": -9.76, "reason": "損切り"}, {"symbol": "MRK", "prop": "pill", "entry_ts": "2025-12-23 09:36", "exit_ts": "2025-12-23 15:46", "direction": "買い", "qty": 8, "entry_price": 103.27, "exit_price": 103.3, "gross_pnl": 0.24, "cost": 1.98, "net_pnl": -1.74, "reason": "引け決済"}], "unseal_count": 0}, {"rank": 3, "name": "VWAP回帰", "hypothesis": "VWAP(出来高加重平均価格)は、その日に売買した参加者の平均コストにあたる。\n    機関投資家は「VWAPより有利に約定させる」ことを目標に発注するため、\n    価格がVWAPから大きく離れると、VWAP付近へ引き戻す注文が出やすい。\n    つまり短時間の行き過ぎは、平均コストの水準へ戻る力が働くと考える。\n    ただし本当のトレンド発生時は戻らずに離れ続けるので、損切りは浅く置く。", "params": {"dev_pct": 0.8, "exit_dev_pct": 0.1, "stop_pct": 0.6, "alloc_pct": 0.15}, "prop": "scale", "buddy": "NVDA", "buddy_prop": "chip", "buddy_trades": 74, "is_benchmark": false, "eliminated": true, "eliminated_at": "2024-09-26 10:55", "equity_usd": 5207.53, "equity_jpy": 801959, "return_pct": -19.88, "vs_benchmark_pt": -42.7, "hp": 0.6, "max_drawdown_pct": 20.05, "level": 621, "judgeable": true, "win_rate": 37.5, "payoff_ratio": 0.75, "avg_net": -2.081, "avg_cost": 1.632, "cost_multiple": -1.27, "total_gross": -278.76, "total_cost": 1013.71, "cost_warning": true, "regime_warning": false, "promoted": false, "regimes": {"up": {"trades": 168, "net_pnl": -361.53, "win_rate": 39.3}, "down": {"trades": 228, "net_pnl": -699.76, "win_rate": 30.7}, "flat": {"trades": 225, "net_pnl": -231.19, "win_rate": 43.1}}, "equity_curve": [["2024-08-26", 6358.84], ["2024-08-27", 6272.27], ["2024-08-28", 6211.73], ["2024-08-29", 6145.0], ["2024-08-30", 6139.2], ["2024-09-03", 5943.75], ["2024-09-04", 5888.63], ["2024-09-05", 5891.6], ["2024-09-06", 5758.75], ["2024-09-09", 5721.7], ["2024-09-10", 5660.07], ["2024-09-11", 5506.66], ["2024-09-12", 5477.49], ["2024-09-13", 5427.97], ["2024-09-16", 5403.87], ["2024-09-17", 5379.09], ["2024-09-18", 5356.44], ["2024-09-19", 5326.26], ["2024-09-20", 5355.34], ["2024-09-23", 5365.34], ["2024-09-24", 5315.65], ["2024-09-25", 5263.15], ["2024-09-26", 5207.53], ["2024-09-27", 5207.53], ["2024-09-30", 5207.53], ["2024-10-01", 5207.53], ["2024-10-02", 5207.53], ["2024-10-03", 5207.53], ["2024-10-04", 5207.53], ["2024-10-07", 5207.53], ["2024-10-08", 5207.53], ["2024-10-09", 5207.53], ["2024-10-10", 5207.53], ["2024-10-11", 5207.53], ["2024-10-14", 5207.53], ["2024-10-15", 5207.53], ["2024-10-16", 5207.53], ["2024-10-17", 5207.53], ["2024-10-18", 5207.53], ["2024-10-21", 5207.53], ["2024-10-22", 5207.53], ["2024-10-23", 5207.53], ["2024-10-24", 5207.53], ["2024-10-25", 5207.53], ["2024-10-28", 5207.53], ["2024-10-29", 5207.53], ["2024-10-30", 5207.53], ["2024-10-31", 5207.53], ["2024-11-01", 5207.53], ["2024-11-04", 5207.53], ["2024-11-05", 5207.53], ["2024-11-06", 5207.53], ["2024-11-07", 5207.53], ["2024-11-08", 5207.53], ["2024-11-11", 5207.53], ["2024-11-12", 5207.53], ["2024-11-13", 5207.53], ["2024-11-14", 5207.53], ["2024-11-15", 5207.53], ["2024-11-18", 5207.53], ["2024-11-19", 5207.53], ["2024-11-20", 5207.53], ["2024-11-21", 5207.53], ["2024-11-22", 5207.53], ["2024-11-25", 5207.53], ["2024-11-26", 5207.53], ["2024-11-27", 5207.53], ["2024-11-29", 5207.53], ["2024-12-02", 5207.53], ["2024-12-03", 5207.53], ["2024-12-04", 5207.53], ["2024-12-05", 5207.53], ["2024-12-06", 5207.53], ["2024-12-09", 5207.53], ["2024-12-10", 5207.53], ["2024-12-11", 5207.53], ["2024-12-12", 5207.53], ["2024-12-13", 5207.53], ["2024-12-16", 5207.53], ["2024-12-17", 5207.53], ["2024-12-18", 5207.53], ["2024-12-19", 5207.53], ["2024-12-20", 5207.53], ["2024-12-23", 5207.53], ["2024-12-24", 5207.53], ["2024-12-26", 5207.53], ["2024-12-27", 5207.53], ["2024-12-30", 5207.53], ["2024-12-31", 5207.53], ["2025-01-02", 5207.53], ["2025-01-03", 5207.53], ["2025-01-06", 5207.53], ["2025-01-07", 5207.53], ["2025-01-08", 5207.53], ["2025-01-10", 5207.53], ["2025-01-13", 5207.53], ["2025-01-14", 5207.53], ["2025-01-15", 5207.53], ["2025-01-16", 5207.53], ["2025-01-17", 5207.53], ["2025-01-21", 5207.53], ["2025-01-22", 5207.53], ["2025-01-23", 5207.53], ["2025-01-24", 5207.53], ["2025-01-27", 5207.53], ["2025-01-28", 5207.53], ["2025-01-29", 5207.53], ["2025-01-30", 5207.53], ["2025-01-31", 5207.53], ["2025-02-03", 5207.53], ["2025-02-04", 5207.53], ["2025-02-05", 5207.53], ["2025-02-06", 5207.53], ["2025-02-07", 5207.53], ["2025-02-10", 5207.53], ["2025-02-11", 5207.53], ["2025-02-12", 5207.53], ["2025-02-13", 5207.53], ["2025-02-14", 5207.53], ["2025-02-18", 5207.53], ["2025-02-19", 5207.53], ["2025-02-20", 5207.53], ["2025-02-21", 5207.53], ["2025-02-24", 5207.53], ["2025-02-25", 5207.53], ["2025-02-26", 5207.53], ["2025-02-27", 5207.53], ["2025-02-28", 5207.53], ["2025-03-03", 5207.53], ["2025-03-04", 5207.53], ["2025-03-05", 5207.53], ["2025-03-06", 5207.53], ["2025-03-07", 5207.53], ["2025-03-11", 5207.53], ["2025-03-12", 5207.53], ["2025-03-13", 5207.53], ["2025-03-14", 5207.53], ["2025-03-17", 5207.53], ["2025-03-18", 5207.53], ["2025-03-19", 5207.53], ["2025-03-20", 5207.53], ["2025-03-21", 5207.53], ["2025-03-24", 5207.53], ["2025-03-25", 5207.53], ["2025-03-26", 5207.53], ["2025-03-27", 5207.53], ["2025-03-28", 5207.53], ["2025-03-31", 5207.53], ["2025-04-01", 5207.53], ["2025-04-02", 5207.53], ["2025-04-03", 5207.53], ["2025-04-04", 5207.53], ["2025-04-07", 5207.53], ["2025-04-08", 5207.53], ["2025-04-09", 5207.53], ["2025-04-10", 5207.53], ["2025-04-11", 5207.53], ["2025-04-14", 5207.53], ["2025-04-15", 5207.53], ["2025-04-16", 5207.53], ["2025-04-17", 5207.53], ["2025-04-21", 5207.53], ["2025-04-22", 5207.53], ["2025-04-23", 5207.53], ["2025-04-24", 5207.53], ["2025-04-25", 5207.53], ["2025-04-28", 5207.53], ["2025-04-29", 5207.53], ["2025-04-30", 5207.53], ["2025-05-01", 5207.53], ["2025-05-02", 5207.53], ["2025-05-05", 5207.53], ["2025-05-06", 5207.53], ["2025-05-07", 5207.53], ["2025-05-08", 5207.53], ["2025-05-09", 5207.53], ["2025-05-12", 5207.53], ["2025-05-13", 5207.53], ["2025-05-14", 5207.53], ["2025-05-15", 5207.53], ["2025-05-16", 5207.53], ["2025-05-19", 5207.53], ["2025-05-20", 5207.53], ["2025-05-21", 5207.53], ["2025-05-22", 5207.53], ["2025-05-23", 5207.53], ["2025-05-27", 5207.53], ["2025-05-28", 5207.53], ["2025-05-29", 5207.53], ["2025-05-30", 5207.53], ["2025-06-02", 5207.53], ["2025-06-03", 5207.53], ["2025-06-04", 5207.53], ["2025-06-05", 5207.53], ["2025-06-06", 5207.53], ["2025-06-09", 5207.53], ["2025-06-10", 5207.53], ["2025-06-11", 5207.53], ["2025-06-12", 5207.53], ["2025-06-13", 5207.53], ["2025-06-16", 5207.53], ["2025-06-17", 5207.53], ["2025-06-18", 5207.53], ["2025-06-20", 5207.53], ["2025-06-23", 5207.53], ["2025-06-24", 5207.53], ["2025-06-25", 5207.53], ["2025-06-26", 5207.53], ["2025-06-27", 5207.53], ["2025-06-30", 5207.53], ["2025-07-01", 5207.53], ["2025-07-02", 5207.53], ["2025-07-03", 5207.53], ["2025-07-07", 5207.53], ["2025-07-08", 5207.53], ["2025-07-09", 5207.53], ["2025-07-10", 5207.53], ["2025-07-11", 5207.53], ["2025-07-14", 5207.53], ["2025-07-15", 5207.53], ["2025-07-16", 5207.53], ["2025-07-17", 5207.53], ["2025-07-18", 5207.53], ["2025-07-21", 5207.53], ["2025-07-22", 5207.53], ["2025-07-23", 5207.53], ["2025-07-24", 5207.53], ["2025-07-25", 5207.53], ["2025-07-28", 5207.53], ["2025-07-29", 5207.53], ["2025-07-30", 5207.53], ["2025-07-31", 5207.53], ["2025-08-01", 5207.53], ["2025-08-04", 5207.53], ["2025-08-05", 5207.53], ["2025-08-06", 5207.53], ["2025-08-07", 5207.53], ["2025-08-08", 5207.53], ["2025-08-11", 5207.53], ["2025-08-12", 5207.53], ["2025-08-13", 5207.53], ["2025-08-14", 5207.53], ["2025-08-15", 5207.53], ["2025-08-18", 5207.53], ["2025-08-19", 5207.53], ["2025-08-20", 5207.53], ["2025-08-21", 5207.53], ["2025-08-22", 5207.53], ["2025-08-25", 5207.53], ["2025-08-26", 5207.53], ["2025-08-27", 5207.53], ["2025-08-28", 5207.53], ["2025-08-29", 5207.53], ["2025-09-02", 5207.53], ["2025-09-03", 5207.53], ["2025-09-04", 5207.53], ["2025-09-05", 5207.53], ["2025-09-08", 5207.53], ["2025-09-09", 5207.53], ["2025-09-10", 5207.53], ["2025-09-11", 5207.53], ["2025-09-12", 5207.53], ["2025-09-15", 5207.53], ["2025-09-16", 5207.53], ["2025-09-17", 5207.53], ["2025-09-18", 5207.53], ["2025-09-19", 5207.53], ["2025-09-22", 5207.53], ["2025-09-23", 5207.53], ["2025-09-24", 5207.53], ["2025-09-25", 5207.53], ["2025-09-26", 5207.53], ["2025-09-29", 5207.53], ["2025-09-30", 5207.53], ["2025-10-01", 5207.53], ["2025-10-02", 5207.53], ["2025-10-03", 5207.53], ["2025-10-06", 5207.53], ["2025-10-07", 5207.53], ["2025-10-08", 5207.53], ["2025-10-09", 5207.53], ["2025-10-10", 5207.53], ["2025-10-13", 5207.53], ["2025-10-14", 5207.53], ["2025-10-15", 5207.53], ["2025-10-16", 5207.53], ["2025-10-17", 5207.53], ["2025-10-20", 5207.53], ["2025-10-21", 5207.53], ["2025-10-22", 5207.53], ["2025-10-23", 5207.53], ["2025-10-24", 5207.53], ["2025-10-27", 5207.53], ["2025-10-28", 5207.53], ["2025-10-29", 5207.53], ["2025-10-30", 5207.53], ["2025-10-31", 5207.53], ["2025-11-03", 5207.53], ["2025-11-04", 5207.53], ["2025-11-05", 5207.53], ["2025-11-06", 5207.53], ["2025-11-07", 5207.53], ["2025-11-10", 5207.53], ["2025-11-11", 5207.53], ["2025-11-12", 5207.53], ["2025-11-13", 5207.53], ["2025-11-14", 5207.53], ["2025-11-17", 5207.53], ["2025-11-18", 5207.53], ["2025-11-19", 5207.53], ["2025-11-20", 5207.53], ["2025-11-21", 5207.53], ["2025-11-24", 5207.53], ["2025-11-25", 5207.53], ["2025-11-26", 5207.53], ["2025-11-28", 5207.53], ["2025-12-01", 5207.53], ["2025-12-02", 5207.53], ["2025-12-03", 5207.53], ["2025-12-04", 5207.53], ["2025-12-05", 5207.53], ["2025-12-08", 5207.53], ["2025-12-09", 5207.53], ["2025-12-10", 5207.53], ["2025-12-11", 5207.53], ["2025-12-12", 5207.53], ["2025-12-15", 5207.53], ["2025-12-16", 5207.53], ["2025-12-17", 5207.53], ["2025-12-18", 5207.53], ["2025-12-19", 5207.53], ["2025-12-22", 5207.53], ["2025-12-23", 5207.53], ["2025-12-24", 5207.53], ["2025-12-26", 5207.53], ["2025-12-29", 5207.53], ["2025-12-30", 5207.53], ["2025-12-31", 5207.53], ["2026-01-02", 5207.53], ["2026-01-05", 5207.53], ["2026-01-06", 5207.53], ["2026-01-07", 5207.53], ["2026-01-08", 5207.53], ["2026-01-09", 5207.53], ["2026-01-12", 5207.53], ["2026-01-13", 5207.53], ["2026-01-14", 5207.53], ["2026-01-15", 5207.53], ["2026-01-16", 5207.53], ["2026-01-20", 5207.53], ["2026-01-21", 5207.53], ["2026-01-22", 5207.53], ["2026-01-23", 5207.53], ["2026-01-26", 5207.53], ["2026-01-27", 5207.53], ["2026-01-28", 5207.53], ["2026-01-29", 5207.53], ["2026-01-30", 5207.53], ["2026-02-02", 5207.53], ["2026-02-03", 5207.53], ["2026-02-04", 5207.53], ["2026-02-05", 5207.53], ["2026-02-06", 5207.53], ["2026-02-09", 5207.53], ["2026-02-10", 5207.53], ["2026-02-11", 5207.53], ["2026-02-12", 5207.53], ["2026-02-13", 5207.53], ["2026-02-17", 5207.53], ["2026-02-18", 5207.53], ["2026-02-19", 5207.53], ["2026-02-20", 5207.53]], "recent_trades": [{"symbol": "TSLA", "prop": "car", "entry_ts": "2024-09-26 10:42", "exit_ts": "2024-09-26 10:55", "direction": "買い", "qty": 3, "entry_price": 253.68, "exit_price": 253.2, "gross_pnl": -1.44, "cost": 1.55, "net_pnl": -2.99, "reason": "脱落決済"}, {"symbol": "META", "prop": "globe", "entry_ts": "2024-09-26 10:48", "exit_ts": "2024-09-26 10:55", "direction": "買い", "qty": 1, "entry_price": 562.32, "exit_price": 561.02, "gross_pnl": -1.3, "cost": 0.73, "net_pnl": -2.03, "reason": "脱落決済"}, {"symbol": "NVDA", "prop": "chip", "entry_ts": "2024-09-26 10:53", "exit_ts": "2024-09-26 10:55", "direction": "買い", "qty": 6, "entry_price": 123.73, "exit_price": 123.47, "gross_pnl": -1.56, "cost": 2.19, "net_pnl": -3.75, "reason": "脱落決済"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2024-09-26 10:53", "exit_ts": "2024-09-26 10:55", "direction": "買い", "qty": 7, "entry_price": 108.77, "exit_price": 108.64, "gross_pnl": -0.91, "cost": 2.16, "net_pnl": -3.07, "reason": "脱落決済"}, {"symbol": "UBER", "prop": "car", "entry_ts": "2024-09-26 10:17", "exit_ts": "2024-09-26 10:55", "direction": "買い", "qty": 10, "entry_price": 75.47, "exit_price": 75.33, "gross_pnl": -1.4, "cost": 1.71, "net_pnl": -3.11, "reason": "脱落決済"}, {"symbol": "QCOM", "prop": "chip", "entry_ts": "2024-09-26 10:29", "exit_ts": "2024-09-26 10:53", "direction": "買い", "qty": 4, "entry_price": 163.34, "exit_price": 162.31, "gross_pnl": -4.12, "cost": 1.34, "net_pnl": -5.46, "reason": "損切り"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2024-09-26 10:29", "exit_ts": "2024-09-26 10:53", "direction": "買い", "qty": 33, "entry_price": 23.73, "exit_price": 23.58, "gross_pnl": -4.95, "cost": 1.91, "net_pnl": -6.86, "reason": "損切り"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2024-09-26 10:34", "exit_ts": "2024-09-26 10:48", "direction": "買い", "qty": 7, "entry_price": 110.12, "exit_price": 109.37, "gross_pnl": -5.25, "cost": 1.36, "net_pnl": -6.61, "reason": "損切り"}, {"symbol": "CAT", "prop": "helmet", "entry_ts": "2024-09-26 10:11", "exit_ts": "2024-09-26 10:42", "direction": "買い", "qty": 2, "entry_price": 380.68, "exit_price": 378.27, "gross_pnl": -4.82, "cost": 1.56, "net_pnl": -6.38, "reason": "損切り"}, {"symbol": "TSLA", "prop": "car", "entry_ts": "2024-09-26 10:28", "exit_ts": "2024-09-26 10:34", "direction": "買い", "qty": 3, "entry_price": 257.0, "exit_price": 254.9, "gross_pnl": -6.3, "cost": 0.91, "net_pnl": -7.21, "reason": "損切り"}, {"symbol": "QCOM", "prop": "chip", "entry_ts": "2024-09-26 09:51", "exit_ts": "2024-09-26 10:28", "direction": "買い", "qty": 4, "entry_price": 164.81, "exit_price": 163.51, "gross_pnl": -5.2, "cost": 1.24, "net_pnl": -6.44, "reason": "損切り"}, {"symbol": "UBER", "prop": "car", "entry_ts": "2024-09-26 09:51", "exit_ts": "2024-09-26 10:16", "direction": "買い", "qty": 10, "entry_price": 76.02, "exit_price": 75.4, "gross_pnl": -6.2, "cost": 1.23, "net_pnl": -7.43, "reason": "損切り"}, {"symbol": "CRM", "prop": "laptop", "entry_ts": "2024-09-26 09:52", "exit_ts": "2024-09-26 10:13", "direction": "買い", "qty": 2, "entry_price": 270.35, "exit_price": 271.21, "gross_pnl": 1.72, "cost": 0.78, "net_pnl": 0.94, "reason": "利確"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2024-09-26 09:52", "exit_ts": "2024-09-26 10:04", "direction": "買い", "qty": 7, "entry_price": 110.51, "exit_price": 111.44, "gross_pnl": 6.51, "cost": 1.74, "net_pnl": 4.77, "reason": "利確"}, {"symbol": "PFE", "prop": "pill", "entry_ts": "2024-09-25 13:01", "exit_ts": "2024-09-25 15:46", "direction": "買い", "qty": 31, "entry_price": 25.29, "exit_price": 25.29, "gross_pnl": 0.0, "cost": 1.37, "net_pnl": -1.37, "reason": "引け決済"}, {"symbol": "COP", "prop": "drum", "entry_ts": "2024-09-25 15:32", "exit_ts": "2024-09-25 15:46", "direction": "買い", "qty": 7, "entry_price": 99.49, "exit_price": 99.48, "gross_pnl": -0.07, "cost": 1.11, "net_pnl": -1.18, "reason": "引け決済"}, {"symbol": "SLB", "prop": "wrench", "entry_ts": "2024-09-25 13:57", "exit_ts": "2024-09-25 15:46", "direction": "買い", "qty": 19, "entry_price": 39.9, "exit_price": 39.74, "gross_pnl": -3.04, "cost": 2.63, "net_pnl": -5.67, "reason": "引け決済"}, {"symbol": "BA", "prop": "plane", "entry_ts": "2024-09-25 14:05", "exit_ts": "2024-09-25 15:46", "direction": "買い", "qty": 5, "entry_price": 152.65, "exit_price": 152.27, "gross_pnl": -1.9, "cost": 1.56, "net_pnl": -3.46, "reason": "引け決済"}, {"symbol": "CVX", "prop": "drum", "entry_ts": "2024-09-25 14:01", "exit_ts": "2024-09-25 15:46", "direction": "買い", "qty": 5, "entry_price": 132.35, "exit_price": 132.26, "gross_pnl": -0.45, "cost": 1.48, "net_pnl": -1.93, "reason": "引け決済"}, {"symbol": "OXY", "prop": "drum", "entry_ts": "2024-09-25 12:20", "exit_ts": "2024-09-25 15:32", "direction": "買い", "qty": 15, "entry_price": 49.68, "exit_price": 49.33, "gross_pnl": -5.25, "cost": 1.99, "net_pnl": -7.24, "reason": "損切り"}, {"symbol": "BA", "prop": "plane", "entry_ts": "2024-09-25 11:57", "exit_ts": "2024-09-25 14:04", "direction": "買い", "qty": 5, "entry_price": 153.63, "exit_price": 152.71, "gross_pnl": -4.6, "cost": 1.07, "net_pnl": -5.67, "reason": "損切り"}, {"symbol": "AVGO", "prop": "chip", "entry_ts": "2024-09-25 11:58", "exit_ts": "2024-09-25 14:00", "direction": "買い", "qty": 4, "entry_price": 171.37, "exit_price": 172.38, "gross_pnl": 4.04, "cost": 0.84, "net_pnl": 3.2, "reason": "利確"}, {"symbol": "JPM", "prop": "coin", "entry_ts": "2024-09-25 11:42", "exit_ts": "2024-09-25 13:57", "direction": "買い", "qty": 3, "entry_price": 200.3, "exit_price": 201.42, "gross_pnl": 3.36, "cost": 0.97, "net_pnl": 2.39, "reason": "利確"}, {"symbol": "SBUX", "prop": "cup", "entry_ts": "2024-09-25 11:28", "exit_ts": "2024-09-25 13:01", "direction": "空売り", "qty": 8, "entry_price": 91.03, "exit_price": 90.74, "gross_pnl": 2.32, "cost": 2.08, "net_pnl": 0.24, "reason": "利確"}, {"symbol": "AMD", "prop": "chip", "entry_ts": "2024-09-25 11:24", "exit_ts": "2024-09-25 12:05", "direction": "空売り", "qty": 4, "entry_price": 161.96, "exit_price": 160.89, "gross_pnl": 4.28, "cost": 0.92, "net_pnl": 3.36, "reason": "利確"}, {"symbol": "BA", "prop": "plane", "entry_ts": "2024-09-25 11:15", "exit_ts": "2024-09-25 11:56", "direction": "買い", "qty": 5, "entry_price": 154.55, "exit_price": 153.68, "gross_pnl": -4.35, "cost": 1.11, "net_pnl": -5.46, "reason": "損切り"}, {"symbol": "CRM", "prop": "laptop", "entry_ts": "2024-09-25 10:53", "exit_ts": "2024-09-25 11:40", "direction": "空売り", "qty": 2, "entry_price": 273.35, "exit_price": 271.66, "gross_pnl": 3.38, "cost": 0.67, "net_pnl": 2.71, "reason": "利確"}, {"symbol": "NVDA", "prop": "chip", "entry_ts": "2024-09-25 10:22", "exit_ts": "2024-09-25 11:33", "direction": "空売り", "qty": 6, "entry_price": 124.54, "exit_price": 123.71, "gross_pnl": 4.98, "cost": 0.72, "net_pnl": 4.26, "reason": "利確"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2024-09-25 10:47", "exit_ts": "2024-09-25 11:24", "direction": "空売り", "qty": 8, "entry_price": 95.46, "exit_price": 94.75, "gross_pnl": 5.68, "cost": 1.3, "net_pnl": 4.38, "reason": "利確"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2024-09-25 10:19", "exit_ts": "2024-09-25 11:24", "direction": "空売り", "qty": 33, "entry_price": 23.905, "exit_price": 23.695, "gross_pnl": 6.93, "cost": 2.03, "net_pnl": 4.9, "reason": "利確"}], "unseal_count": 0}, {"rank": 4, "name": "出来高スパイク追い", "hypothesis": "ある1分の出来高が普段の同時刻より極端に多いとき、そこでは\n    「今すぐ売買したい理由を持った誰か」が動いている(ニュース・大口の執行など)。\n    情報は一瞬では価格に織り込まれず、追随する参加者が少しずつ入ってくるため、\n    スパイクが出た方向に短時間だけ動きが続きやすい、と考える。\n    普段の出来高との比較なので、銘柄ごとの規模の違いに影響されないのが利点。", "params": {"mult": 3.0, "stop_pct": 0.5, "take_pct": 1.0, "alloc_pct": 0.15}, "prop": "bolt", "buddy": "BA", "buddy_prop": "plane", "buddy_trades": 41, "is_benchmark": false, "eliminated": true, "eliminated_at": "2024-11-06 09:54", "equity_usd": 5196.8, "equity_jpy": 800307, "return_pct": -20.05, "vs_benchmark_pt": -42.9, "hp": 0.0, "max_drawdown_pct": 20.13, "level": 844, "judgeable": true, "win_rate": 35.4, "payoff_ratio": 0.97, "avg_net": -1.544, "avg_cost": 1.524, "cost_multiple": -1.01, "total_gross": -17.26, "total_cost": 1285.94, "cost_warning": true, "regime_warning": false, "promoted": false, "regimes": {"up": {"trades": 244, "net_pnl": -299.41, "win_rate": 36.9}, "down": {"trades": 297, "net_pnl": -506.65, "win_rate": 34.0}, "flat": {"trades": 303, "net_pnl": -497.14, "win_rate": 35.6}}, "equity_curve": [["2024-08-26", 6500.0], ["2024-08-27", 6488.35], ["2024-08-28", 6477.68], ["2024-08-29", 6448.48], ["2024-08-30", 6413.73], ["2024-09-03", 6324.22], ["2024-09-04", 6280.17], ["2024-09-05", 6233.55], ["2024-09-06", 6198.92], ["2024-09-09", 6198.74], ["2024-09-10", 6077.05], ["2024-09-11", 6078.22], ["2024-09-12", 6028.44], ["2024-09-13", 5996.99], ["2024-09-16", 5973.22], ["2024-09-17", 5899.58], ["2024-09-18", 5819.2], ["2024-09-19", 5795.61], ["2024-09-20", 5773.2], ["2024-09-23", 5768.4], ["2024-09-24", 5733.23], ["2024-09-25", 5718.12], ["2024-09-26", 5713.2], ["2024-09-27", 5680.68], ["2024-09-30", 5620.08], ["2024-10-01", 5634.92], ["2024-10-02", 5600.72], ["2024-10-03", 5618.44], ["2024-10-04", 5617.76], ["2024-10-07", 5630.45], ["2024-10-08", 5605.15], ["2024-10-09", 5606.25], ["2024-10-10", 5593.65], ["2024-10-11", 5621.51], ["2024-10-14", 5605.46], ["2024-10-15", 5532.11], ["2024-10-16", 5511.92], ["2024-10-17", 5497.24], ["2024-10-18", 5468.77], ["2024-10-21", 5440.99], ["2024-10-22", 5439.91], ["2024-10-23", 5483.26], ["2024-10-24", 5472.55], ["2024-10-25", 5414.85], ["2024-10-28", 5383.88], ["2024-10-29", 5380.45], ["2024-10-30", 5358.83], ["2024-10-31", 5313.47], ["2024-11-01", 5265.74], ["2024-11-04", 5271.89], ["2024-11-05", 5255.71], ["2024-11-06", 5196.8], ["2024-11-07", 5196.8], ["2024-11-08", 5196.8], ["2024-11-11", 5196.8], ["2024-11-12", 5196.8], ["2024-11-13", 5196.8], ["2024-11-14", 5196.8], ["2024-11-15", 5196.8], ["2024-11-18", 5196.8], ["2024-11-19", 5196.8], ["2024-11-20", 5196.8], ["2024-11-21", 5196.8], ["2024-11-22", 5196.8], ["2024-11-25", 5196.8], ["2024-11-26", 5196.8], ["2024-11-27", 5196.8], ["2024-11-29", 5196.8], ["2024-12-02", 5196.8], ["2024-12-03", 5196.8], ["2024-12-04", 5196.8], ["2024-12-05", 5196.8], ["2024-12-06", 5196.8], ["2024-12-09", 5196.8], ["2024-12-10", 5196.8], ["2024-12-11", 5196.8], ["2024-12-12", 5196.8], ["2024-12-13", 5196.8], ["2024-12-16", 5196.8], ["2024-12-17", 5196.8], ["2024-12-18", 5196.8], ["2024-12-19", 5196.8], ["2024-12-20", 5196.8], ["2024-12-23", 5196.8], ["2024-12-24", 5196.8], ["2024-12-26", 5196.8], ["2024-12-27", 5196.8], ["2024-12-30", 5196.8], ["2024-12-31", 5196.8], ["2025-01-02", 5196.8], ["2025-01-03", 5196.8], ["2025-01-06", 5196.8], ["2025-01-07", 5196.8], ["2025-01-08", 5196.8], ["2025-01-10", 5196.8], ["2025-01-13", 5196.8], ["2025-01-14", 5196.8], ["2025-01-15", 5196.8], ["2025-01-16", 5196.8], ["2025-01-17", 5196.8], ["2025-01-21", 5196.8], ["2025-01-22", 5196.8], ["2025-01-23", 5196.8], ["2025-01-24", 5196.8], ["2025-01-27", 5196.8], ["2025-01-28", 5196.8], ["2025-01-29", 5196.8], ["2025-01-30", 5196.8], ["2025-01-31", 5196.8], ["2025-02-03", 5196.8], ["2025-02-04", 5196.8], ["2025-02-05", 5196.8], ["2025-02-06", 5196.8], ["2025-02-07", 5196.8], ["2025-02-10", 5196.8], ["2025-02-11", 5196.8], ["2025-02-12", 5196.8], ["2025-02-13", 5196.8], ["2025-02-14", 5196.8], ["2025-02-18", 5196.8], ["2025-02-19", 5196.8], ["2025-02-20", 5196.8], ["2025-02-21", 5196.8], ["2025-02-24", 5196.8], ["2025-02-25", 5196.8], ["2025-02-26", 5196.8], ["2025-02-27", 5196.8], ["2025-02-28", 5196.8], ["2025-03-03", 5196.8], ["2025-03-04", 5196.8], ["2025-03-05", 5196.8], ["2025-03-06", 5196.8], ["2025-03-07", 5196.8], ["2025-03-11", 5196.8], ["2025-03-12", 5196.8], ["2025-03-13", 5196.8], ["2025-03-14", 5196.8], ["2025-03-17", 5196.8], ["2025-03-18", 5196.8], ["2025-03-19", 5196.8], ["2025-03-20", 5196.8], ["2025-03-21", 5196.8], ["2025-03-24", 5196.8], ["2025-03-25", 5196.8], ["2025-03-26", 5196.8], ["2025-03-27", 5196.8], ["2025-03-28", 5196.8], ["2025-03-31", 5196.8], ["2025-04-01", 5196.8], ["2025-04-02", 5196.8], ["2025-04-03", 5196.8], ["2025-04-04", 5196.8], ["2025-04-07", 5196.8], ["2025-04-08", 5196.8], ["2025-04-09", 5196.8], ["2025-04-10", 5196.8], ["2025-04-11", 5196.8], ["2025-04-14", 5196.8], ["2025-04-15", 5196.8], ["2025-04-16", 5196.8], ["2025-04-17", 5196.8], ["2025-04-21", 5196.8], ["2025-04-22", 5196.8], ["2025-04-23", 5196.8], ["2025-04-24", 5196.8], ["2025-04-25", 5196.8], ["2025-04-28", 5196.8], ["2025-04-29", 5196.8], ["2025-04-30", 5196.8], ["2025-05-01", 5196.8], ["2025-05-02", 5196.8], ["2025-05-05", 5196.8], ["2025-05-06", 5196.8], ["2025-05-07", 5196.8], ["2025-05-08", 5196.8], ["2025-05-09", 5196.8], ["2025-05-12", 5196.8], ["2025-05-13", 5196.8], ["2025-05-14", 5196.8], ["2025-05-15", 5196.8], ["2025-05-16", 5196.8], ["2025-05-19", 5196.8], ["2025-05-20", 5196.8], ["2025-05-21", 5196.8], ["2025-05-22", 5196.8], ["2025-05-23", 5196.8], ["2025-05-27", 5196.8], ["2025-05-28", 5196.8], ["2025-05-29", 5196.8], ["2025-05-30", 5196.8], ["2025-06-02", 5196.8], ["2025-06-03", 5196.8], ["2025-06-04", 5196.8], ["2025-06-05", 5196.8], ["2025-06-06", 5196.8], ["2025-06-09", 5196.8], ["2025-06-10", 5196.8], ["2025-06-11", 5196.8], ["2025-06-12", 5196.8], ["2025-06-13", 5196.8], ["2025-06-16", 5196.8], ["2025-06-17", 5196.8], ["2025-06-18", 5196.8], ["2025-06-20", 5196.8], ["2025-06-23", 5196.8], ["2025-06-24", 5196.8], ["2025-06-25", 5196.8], ["2025-06-26", 5196.8], ["2025-06-27", 5196.8], ["2025-06-30", 5196.8], ["2025-07-01", 5196.8], ["2025-07-02", 5196.8], ["2025-07-03", 5196.8], ["2025-07-07", 5196.8], ["2025-07-08", 5196.8], ["2025-07-09", 5196.8], ["2025-07-10", 5196.8], ["2025-07-11", 5196.8], ["2025-07-14", 5196.8], ["2025-07-15", 5196.8], ["2025-07-16", 5196.8], ["2025-07-17", 5196.8], ["2025-07-18", 5196.8], ["2025-07-21", 5196.8], ["2025-07-22", 5196.8], ["2025-07-23", 5196.8], ["2025-07-24", 5196.8], ["2025-07-25", 5196.8], ["2025-07-28", 5196.8], ["2025-07-29", 5196.8], ["2025-07-30", 5196.8], ["2025-07-31", 5196.8], ["2025-08-01", 5196.8], ["2025-08-04", 5196.8], ["2025-08-05", 5196.8], ["2025-08-06", 5196.8], ["2025-08-07", 5196.8], ["2025-08-08", 5196.8], ["2025-08-11", 5196.8], ["2025-08-12", 5196.8], ["2025-08-13", 5196.8], ["2025-08-14", 5196.8], ["2025-08-15", 5196.8], ["2025-08-18", 5196.8], ["2025-08-19", 5196.8], ["2025-08-20", 5196.8], ["2025-08-21", 5196.8], ["2025-08-22", 5196.8], ["2025-08-25", 5196.8], ["2025-08-26", 5196.8], ["2025-08-27", 5196.8], ["2025-08-28", 5196.8], ["2025-08-29", 5196.8], ["2025-09-02", 5196.8], ["2025-09-03", 5196.8], ["2025-09-04", 5196.8], ["2025-09-05", 5196.8], ["2025-09-08", 5196.8], ["2025-09-09", 5196.8], ["2025-09-10", 5196.8], ["2025-09-11", 5196.8], ["2025-09-12", 5196.8], ["2025-09-15", 5196.8], ["2025-09-16", 5196.8], ["2025-09-17", 5196.8], ["2025-09-18", 5196.8], ["2025-09-19", 5196.8], ["2025-09-22", 5196.8], ["2025-09-23", 5196.8], ["2025-09-24", 5196.8], ["2025-09-25", 5196.8], ["2025-09-26", 5196.8], ["2025-09-29", 5196.8], ["2025-09-30", 5196.8], ["2025-10-01", 5196.8], ["2025-10-02", 5196.8], ["2025-10-03", 5196.8], ["2025-10-06", 5196.8], ["2025-10-07", 5196.8], ["2025-10-08", 5196.8], ["2025-10-09", 5196.8], ["2025-10-10", 5196.8], ["2025-10-13", 5196.8], ["2025-10-14", 5196.8], ["2025-10-15", 5196.8], ["2025-10-16", 5196.8], ["2025-10-17", 5196.8], ["2025-10-20", 5196.8], ["2025-10-21", 5196.8], ["2025-10-22", 5196.8], ["2025-10-23", 5196.8], ["2025-10-24", 5196.8], ["2025-10-27", 5196.8], ["2025-10-28", 5196.8], ["2025-10-29", 5196.8], ["2025-10-30", 5196.8], ["2025-10-31", 5196.8], ["2025-11-03", 5196.8], ["2025-11-04", 5196.8], ["2025-11-05", 5196.8], ["2025-11-06", 5196.8], ["2025-11-07", 5196.8], ["2025-11-10", 5196.8], ["2025-11-11", 5196.8], ["2025-11-12", 5196.8], ["2025-11-13", 5196.8], ["2025-11-14", 5196.8], ["2025-11-17", 5196.8], ["2025-11-18", 5196.8], ["2025-11-19", 5196.8], ["2025-11-20", 5196.8], ["2025-11-21", 5196.8], ["2025-11-24", 5196.8], ["2025-11-25", 5196.8], ["2025-11-26", 5196.8], ["2025-11-28", 5196.8], ["2025-12-01", 5196.8], ["2025-12-02", 5196.8], ["2025-12-03", 5196.8], ["2025-12-04", 5196.8], ["2025-12-05", 5196.8], ["2025-12-08", 5196.8], ["2025-12-09", 5196.8], ["2025-12-10", 5196.8], ["2025-12-11", 5196.8], ["2025-12-12", 5196.8], ["2025-12-15", 5196.8], ["2025-12-16", 5196.8], ["2025-12-17", 5196.8], ["2025-12-18", 5196.8], ["2025-12-19", 5196.8], ["2025-12-22", 5196.8], ["2025-12-23", 5196.8], ["2025-12-24", 5196.8], ["2025-12-26", 5196.8], ["2025-12-29", 5196.8], ["2025-12-30", 5196.8], ["2025-12-31", 5196.8], ["2026-01-02", 5196.8], ["2026-01-05", 5196.8], ["2026-01-06", 5196.8], ["2026-01-07", 5196.8], ["2026-01-08", 5196.8], ["2026-01-09", 5196.8], ["2026-01-12", 5196.8], ["2026-01-13", 5196.8], ["2026-01-14", 5196.8], ["2026-01-15", 5196.8], ["2026-01-16", 5196.8], ["2026-01-20", 5196.8], ["2026-01-21", 5196.8], ["2026-01-22", 5196.8], ["2026-01-23", 5196.8], ["2026-01-26", 5196.8], ["2026-01-27", 5196.8], ["2026-01-28", 5196.8], ["2026-01-29", 5196.8], ["2026-01-30", 5196.8], ["2026-02-02", 5196.8], ["2026-02-03", 5196.8], ["2026-02-04", 5196.8], ["2026-02-05", 5196.8], ["2026-02-06", 5196.8], ["2026-02-09", 5196.8], ["2026-02-10", 5196.8], ["2026-02-11", 5196.8], ["2026-02-12", 5196.8], ["2026-02-13", 5196.8], ["2026-02-17", 5196.8], ["2026-02-18", 5196.8], ["2026-02-19", 5196.8], ["2026-02-20", 5196.8]], "recent_trades": [{"symbol": "V", "prop": "card", "entry_ts": "2024-11-06 09:49", "exit_ts": "2024-11-06 09:54", "direction": "買い", "qty": 2, "entry_price": 300.34, "exit_price": 299.74, "gross_pnl": -1.2, "cost": 0.68, "net_pnl": -1.88, "reason": "脱落決済"}, {"symbol": "MS", "prop": "coin", "entry_ts": "2024-11-06 09:52", "exit_ts": "2024-11-06 09:54", "direction": "買い", "qty": 6, "entry_price": 123.7, "exit_price": 123.26, "gross_pnl": -2.64, "cost": 1.18, "net_pnl": -3.82, "reason": "脱落決済"}, {"symbol": "TSLA", "prop": "car", "entry_ts": "2024-11-06 09:53", "exit_ts": "2024-11-06 09:54", "direction": "買い", "qty": 2, "entry_price": 281.89, "exit_price": 281.59, "gross_pnl": -0.6, "cost": 1.63, "net_pnl": -2.23, "reason": "脱落決済"}, {"symbol": "BAC", "prop": "coin", "entry_ts": "2024-11-06 09:48", "exit_ts": "2024-11-06 09:54", "direction": "買い", "qty": 18, "entry_price": 43.43, "exit_price": 43.27, "gross_pnl": -2.88, "cost": 1.54, "net_pnl": -4.42, "reason": "脱落決済"}, {"symbol": "SCHW", "prop": "chart", "entry_ts": "2024-11-06 09:40", "exit_ts": "2024-11-06 09:54", "direction": "買い", "qty": 10, "entry_price": 71.86, "exit_price": 71.95, "gross_pnl": 0.9, "cost": 1.64, "net_pnl": -0.74, "reason": "脱落決済"}, {"symbol": "BA", "prop": "plane", "entry_ts": "2024-11-06 09:45", "exit_ts": "2024-11-06 09:53", "direction": "買い", "qty": 5, "entry_price": 147.37, "exit_price": 146.57, "gross_pnl": -4.0, "cost": 1.21, "net_pnl": -5.21, "reason": "損切り"}, {"symbol": "WFC", "prop": "coin", "entry_ts": "2024-11-06 09:42", "exit_ts": "2024-11-06 09:52", "direction": "買い", "qty": 11, "entry_price": 69.7, "exit_price": 69.33, "gross_pnl": -4.07, "cost": 1.38, "net_pnl": -5.45, "reason": "損切り"}, {"symbol": "MS", "prop": "coin", "entry_ts": "2024-11-06 09:45", "exit_ts": "2024-11-06 09:49", "direction": "買い", "qty": 6, "entry_price": 124.4, "exit_price": 123.71, "gross_pnl": -4.14, "cost": 1.37, "net_pnl": -5.51, "reason": "損切り"}, {"symbol": "XOM", "prop": "drum", "entry_ts": "2024-11-06 09:40", "exit_ts": "2024-11-06 09:48", "direction": "空売り", "qty": 7, "entry_price": 112.02, "exit_price": 112.67, "gross_pnl": -4.55, "cost": 1.36, "net_pnl": -5.91, "reason": "損切り"}, {"symbol": "ORCL", "prop": "laptop", "entry_ts": "2024-11-06 09:36", "exit_ts": "2024-11-06 09:45", "direction": "空売り", "qty": 4, "entry_price": 174.66, "exit_price": 175.61, "gross_pnl": -3.8, "cost": 1.11, "net_pnl": -4.91, "reason": "損切り"}, {"symbol": "DIS", "prop": "star", "entry_ts": "2024-11-06 09:40", "exit_ts": "2024-11-06 09:45", "direction": "買い", "qty": 8, "entry_price": 97.09, "exit_price": 96.35, "gross_pnl": -5.92, "cost": 1.95, "net_pnl": -7.87, "reason": "損切り"}, {"symbol": "C", "prop": "coin", "entry_ts": "2024-11-06 09:40", "exit_ts": "2024-11-06 09:42", "direction": "空売り", "qty": 11, "entry_price": 66.38, "exit_price": 66.9, "gross_pnl": -5.72, "cost": 0.96, "net_pnl": -6.68, "reason": "損切り"}, {"symbol": "WFC", "prop": "coin", "entry_ts": "2024-11-06 09:36", "exit_ts": "2024-11-06 09:40", "direction": "空売り", "qty": 11, "entry_price": 69.58, "exit_price": 68.85, "gross_pnl": 8.03, "cost": 1.62, "net_pnl": 6.41, "reason": "利確"}, {"symbol": "GS", "prop": "coin", "entry_ts": "2024-11-06 09:36", "exit_ts": "2024-11-06 09:40", "direction": "買い", "qty": 1, "entry_price": 556.86, "exit_price": 564.04, "gross_pnl": 7.18, "cost": 1.15, "net_pnl": 6.03, "reason": "利確"}, {"symbol": "MS", "prop": "coin", "entry_ts": "2024-11-06 09:37", "exit_ts": "2024-11-06 09:40", "direction": "買い", "qty": 6, "entry_price": 123.89, "exit_price": 123.21, "gross_pnl": -4.08, "cost": 1.35, "net_pnl": -5.43, "reason": "損切り"}, {"symbol": "ABBV", "prop": "pill", "entry_ts": "2024-11-06 09:38", "exit_ts": "2024-11-06 09:40", "direction": "買い", "qty": 4, "entry_price": 194.02, "exit_price": 192.83, "gross_pnl": -4.76, "cost": 1.4, "net_pnl": -6.16, "reason": "損切り"}, {"symbol": "HD", "prop": "hammer", "entry_ts": "2024-11-06 09:36", "exit_ts": "2024-11-06 09:38", "direction": "買い", "qty": 2, "entry_price": 373.52, "exit_price": 371.67, "gross_pnl": -3.7, "cost": 1.44, "net_pnl": -5.14, "reason": "損切り"}, {"symbol": "OXY", "prop": "drum", "entry_ts": "2024-11-05 13:15", "exit_ts": "2024-11-05 15:59", "direction": "買い", "qty": 16, "entry_price": 48.51, "exit_price": 48.62, "gross_pnl": 1.76, "cost": 2.25, "net_pnl": -0.49, "reason": "引け強制決済"}, {"symbol": "PFE", "prop": "pill", "entry_ts": "2024-11-05 09:41", "exit_ts": "2024-11-05 15:46", "direction": "買い", "qty": 32, "entry_price": 24.14, "exit_price": 24.32, "gross_pnl": 5.76, "cost": 1.48, "net_pnl": 4.28, "reason": "引け決済"}, {"symbol": "QQQ", "prop": "crown", "entry_ts": "2024-11-05 10:48", "exit_ts": "2024-11-05 15:46", "direction": "買い", "qty": 1, "entry_price": 486.72, "exit_price": 487.06, "gross_pnl": 0.34, "cost": 0.27, "net_pnl": 0.07, "reason": "引け決済"}, {"symbol": "JNJ", "prop": "pill", "entry_ts": "2024-11-05 15:20", "exit_ts": "2024-11-05 15:46", "direction": "空売り", "qty": 5, "entry_price": 149.42, "exit_price": 149.73, "gross_pnl": -1.55, "cost": 1.13, "net_pnl": -2.68, "reason": "引け決済"}, {"symbol": "BA", "prop": "plane", "entry_ts": "2024-11-05 13:41", "exit_ts": "2024-11-05 15:46", "direction": "空売り", "qty": 5, "entry_price": 152.37, "exit_price": 150.73, "gross_pnl": 8.2, "cost": 1.24, "net_pnl": 6.96, "reason": "引け決済"}, {"symbol": "HD", "prop": "hammer", "entry_ts": "2024-11-05 09:47", "exit_ts": "2024-11-05 15:19", "direction": "空売り", "qty": 2, "entry_price": 380.11, "exit_price": 382.09, "gross_pnl": -3.96, "cost": 1.19, "net_pnl": -5.15, "reason": "損切り"}, {"symbol": "CVX", "prop": "drum", "entry_ts": "2024-11-05 09:38", "exit_ts": "2024-11-05 13:41", "direction": "買い", "qty": 5, "entry_price": 141.32, "exit_price": 140.6, "gross_pnl": -3.6, "cost": 2.22, "net_pnl": -5.82, "reason": "損切り"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2024-11-05 13:07", "exit_ts": "2024-11-05 13:15", "direction": "買い", "qty": 33, "entry_price": 23.39, "exit_price": 23.29, "gross_pnl": -3.3, "cost": 1.71, "net_pnl": -5.01, "reason": "損切り"}, {"symbol": "OXY", "prop": "drum", "entry_ts": "2024-11-05 10:23", "exit_ts": "2024-11-05 13:09", "direction": "買い", "qty": 16, "entry_price": 48.75, "exit_price": 48.5, "gross_pnl": -4.0, "cost": 3.0, "net_pnl": -7.0, "reason": "損切り"}, {"symbol": "SPY", "prop": "crown", "entry_ts": "2024-11-05 09:42", "exit_ts": "2024-11-05 10:48", "direction": "空売り", "qty": 1, "entry_price": 560.68, "exit_price": 563.36, "gross_pnl": -2.68, "cost": 0.42, "net_pnl": -3.1, "reason": "損切り"}, {"symbol": "BA", "prop": "plane", "entry_ts": "2024-11-05 10:12", "exit_ts": "2024-11-05 10:23", "direction": "空売り", "qty": 5, "entry_price": 153.44, "exit_price": 154.215, "gross_pnl": -3.88, "cost": 1.17, "net_pnl": -5.05, "reason": "損切り"}, {"symbol": "SLB", "prop": "wrench", "entry_ts": "2024-11-05 09:54", "exit_ts": "2024-11-05 10:10", "direction": "買い", "qty": 20, "entry_price": 38.78, "exit_price": 38.58, "gross_pnl": -4.0, "cost": 2.91, "net_pnl": -6.91, "reason": "損切り"}, {"symbol": "BA", "prop": "plane", "entry_ts": "2024-11-05 09:36", "exit_ts": "2024-11-05 09:53", "direction": "空売り", "qty": 5, "entry_price": 155.26, "exit_price": 153.435, "gross_pnl": 9.12, "cost": 1.47, "net_pnl": 7.65, "reason": "利確"}], "unseal_count": 0}, {"rank": 5, "name": "寄り付きブレイク", "hypothesis": "寄り付き後30分は、前日のニュースや決算を消化するために売買が集中する。\n    その30分でついた高値・安値は、その日の参加者が合意した「当面の上限・下限」になる。\n    そこを抜けるということは、想定より強い買い(売り)が入ったということなので、\n    様子見していた短期資金が追随し、同じ方向にもう一段動きやすい、と考える。\n    抜けた反対側は「合意が崩れた」印なので、そこを損切りラインにする。", "params": {"window_min": 30, "stop_pct": 0.5, "take_pct": 1.5, "alloc_pct": 0.15}, "prop": "arrow", "buddy": "AVGO", "buddy_prop": "chip", "buddy_trades": 23, "is_benchmark": false, "eliminated": true, "eliminated_at": "2024-12-27 14:10", "equity_usd": 4997.16, "equity_jpy": 769562, "return_pct": -23.12, "vs_benchmark_pt": -46.0, "hp": 0.0, "max_drawdown_pct": 25.19, "level": 808, "judgeable": true, "win_rate": 32.3, "payoff_ratio": 1.11, "avg_net": -1.605, "avg_cost": 1.59, "cost_multiple": -1.01, "total_gross": -12.27, "total_cost": 1284.5, "cost_warning": true, "regime_warning": false, "promoted": false, "regimes": {"up": {"trades": 224, "net_pnl": -292.47, "win_rate": 35.3}, "down": {"trades": 280, "net_pnl": -452.51, "win_rate": 32.1}, "flat": {"trades": 304, "net_pnl": -551.78, "win_rate": 30.3}}, "equity_curve": [["2024-08-26", 6491.25], ["2024-08-27", 6489.78], ["2024-08-28", 6473.37], ["2024-08-29", 6455.17], ["2024-08-30", 6388.59], ["2024-09-03", 6389.9], ["2024-09-04", 6374.02], ["2024-09-05", 6332.93], ["2024-09-06", 6360.3], ["2024-09-09", 6351.18], ["2024-09-10", 6328.2], ["2024-09-11", 6322.33], ["2024-09-12", 6240.46], ["2024-09-13", 6193.94], ["2024-09-16", 6160.62], ["2024-09-17", 6122.5], ["2024-09-18", 6101.22], ["2024-09-19", 6105.93], ["2024-09-20", 6115.06], ["2024-09-23", 6083.77], ["2024-09-24", 6062.1], ["2024-09-25", 6040.07], ["2024-09-26", 6036.42], ["2024-09-27", 6033.89], ["2024-09-30", 6039.9], ["2024-10-01", 5997.51], ["2024-10-02", 5999.42], ["2024-10-03", 5982.74], ["2024-10-04", 5944.95], ["2024-10-07", 5933.71], ["2024-10-08", 5957.23], ["2024-10-09", 5975.74], ["2024-10-10", 5965.56], ["2024-10-11", 5972.26], ["2024-10-14", 5961.01], ["2024-10-15", 5946.28], ["2024-10-16", 5944.93], ["2024-10-17", 5903.85], ["2024-10-18", 5888.46], ["2024-10-21", 5870.14], ["2024-10-22", 5843.88], ["2024-10-23", 5830.67], ["2024-10-24", 5794.07], ["2024-10-25", 5768.09], ["2024-10-28", 5730.2], ["2024-10-29", 5730.38], ["2024-10-30", 5704.22], ["2024-10-31", 5702.55], ["2024-11-01", 5683.66], ["2024-11-04", 5660.23], ["2024-11-05", 5627.23], ["2024-11-06", 5621.14], ["2024-11-07", 5606.7], ["2024-11-08", 5570.85], ["2024-11-11", 5548.5], ["2024-11-12", 5563.7], ["2024-11-13", 5571.26], ["2024-11-14", 5533.37], ["2024-11-15", 5531.04], ["2024-11-18", 5536.61], ["2024-11-19", 5530.56], ["2024-11-20", 5464.58], ["2024-11-21", 5462.57], ["2024-11-22", 5466.26], ["2024-11-25", 5457.96], ["2024-11-26", 5480.16], ["2024-11-27", 5459.86], ["2024-11-29", 5458.47], ["2024-12-02", 5437.64], ["2024-12-03", 5393.0], ["2024-12-04", 5409.77], ["2024-12-05", 5410.23], ["2024-12-06", 5408.45], ["2024-12-09", 5419.35], ["2024-12-10", 5380.45], ["2024-12-11", 5375.22], ["2024-12-12", 5351.67], ["2024-12-13", 5369.83], ["2024-12-16", 5359.86], ["2024-12-17", 5339.08], ["2024-12-18", 5327.02], ["2024-12-19", 5317.17], ["2024-12-20", 5337.4], ["2024-12-23", 5307.23], ["2024-12-24", 5252.34], ["2024-12-26", 5236.34], ["2024-12-27", 5200.16], ["2024-12-30", 5208.36], ["2024-12-31", 5207.56], ["2025-01-02", 5208.86], ["2025-01-03", 5203.06], ["2025-01-06", 5202.76], ["2025-01-07", 5224.56], ["2025-01-08", 5217.56], ["2025-01-10", 5219.66], ["2025-01-13", 5220.66], ["2025-01-14", 5223.96], ["2025-01-15", 5210.86], ["2025-01-16", 5192.66], ["2025-01-17", 5183.66], ["2025-01-21", 5139.66], ["2025-01-22", 5143.16], ["2025-01-23", 5128.76], ["2025-01-24", 5130.66], ["2025-01-27", 5123.96], ["2025-01-28", 5132.16], ["2025-01-29", 5128.56], ["2025-01-30", 5113.46], ["2025-01-31", 5122.36], ["2025-02-03", 5122.06], ["2025-02-04", 5131.46], ["2025-02-05", 5130.26], ["2025-02-06", 5113.46], ["2025-02-07", 5117.96], ["2025-02-10", 5137.56], ["2025-02-11", 5117.26], ["2025-02-12", 5127.46], ["2025-02-13", 5132.86], ["2025-02-14", 5142.46], ["2025-02-18", 5132.06], ["2025-02-19", 5126.46], ["2025-02-20", 5127.96], ["2025-02-21", 5141.96], ["2025-02-24", 5144.96], ["2025-02-25", 5156.26], ["2025-02-26", 5158.76], ["2025-02-27", 5161.16], ["2025-02-28", 5151.06], ["2025-03-03", 5164.26], ["2025-03-04", 5193.56], ["2025-03-05", 5178.16], ["2025-03-06", 5189.76], ["2025-03-07", 5199.16], ["2025-03-11", 5219.96], ["2025-03-12", 5203.16], ["2025-03-13", 5209.86], ["2025-03-14", 5174.66], ["2025-03-17", 5167.86], ["2025-03-18", 5170.26], ["2025-03-19", 5158.66], ["2025-03-20", 5160.56], ["2025-03-21", 5162.16], ["2025-03-24", 5146.56], ["2025-03-25", 5138.76], ["2025-03-26", 5145.06], ["2025-03-27", 5150.26], ["2025-03-28", 5167.66], ["2025-03-31", 5163.06], ["2025-04-01", 5169.26], ["2025-04-02", 5160.26], ["2025-04-03", 5196.36], ["2025-04-04", 5253.56], ["2025-04-07", 5243.76], ["2025-04-08", 5244.76], ["2025-04-09", 5193.06], ["2025-04-10", 5206.96], ["2025-04-11", 5176.06], ["2025-04-14", 5176.66], ["2025-04-15", 5173.66], ["2025-04-16", 5188.76], ["2025-04-17", 5183.46], ["2025-04-21", 5195.56], ["2025-04-22", 5179.76], ["2025-04-23", 5167.66], ["2025-04-24", 5152.46], ["2025-04-25", 5146.96], ["2025-04-28", 5144.46], ["2025-04-29", 5133.96], ["2025-04-30", 5132.56], ["2025-05-01", 5131.56], ["2025-05-02", 5115.86], ["2025-05-05", 5113.36], ["2025-05-06", 5118.66], ["2025-05-07", 5107.26], ["2025-05-08", 5103.26], ["2025-05-09", 5099.96], ["2025-05-12", 5090.76], ["2025-05-13", 5082.66], ["2025-05-14", 5073.66], ["2025-05-15", 5063.56], ["2025-05-16", 5058.16], ["2025-05-19", 5052.76], ["2025-05-20", 5053.26], ["2025-05-21", 5069.16], ["2025-05-22", 5072.36], ["2025-05-23", 5070.96], ["2025-05-27", 5058.66], ["2025-05-28", 5064.46], ["2025-05-29", 5067.66], ["2025-05-30", 5062.06], ["2025-06-02", 5064.06], ["2025-06-03", 5064.76], ["2025-06-04", 5070.16], ["2025-06-05", 5072.46], ["2025-06-06", 5062.76], ["2025-06-09", 5062.86], ["2025-06-10", 5062.16], ["2025-06-11", 5060.86], ["2025-06-12", 5059.86], ["2025-06-13", 5071.36], ["2025-06-16", 5055.26], ["2025-06-17", 5055.26], ["2025-06-18", 5046.16], ["2025-06-20", 5053.06], ["2025-06-23", 5061.46], ["2025-06-24", 5051.76], ["2025-06-25", 5046.86], ["2025-06-26", 5050.76], ["2025-06-27", 5045.46], ["2025-06-30", 5033.26], ["2025-07-01", 5033.36], ["2025-07-02", 5032.36], ["2025-07-03", 5030.06], ["2025-07-07", 5019.56], ["2025-07-08", 5025.86], ["2025-07-09", 5022.66], ["2025-07-10", 5015.76], ["2025-07-11", 5026.26], ["2025-07-14", 5018.66], ["2025-07-15", 5029.66], ["2025-07-16", 5032.56], ["2025-07-17", 5014.26], ["2025-07-18", 4988.16], ["2025-07-21", 4983.66], ["2025-07-22", 4992.56], ["2025-07-23", 4994.76], ["2025-07-24", 4981.46], ["2025-07-25", 4975.46], ["2025-07-28", 4967.46], ["2025-07-29", 4967.26], ["2025-07-30", 4960.76], ["2025-07-31", 4968.96], ["2025-08-01", 4990.36], ["2025-08-04", 4975.26], ["2025-08-05", 4981.56], ["2025-08-06", 4978.86], ["2025-08-07", 4986.16], ["2025-08-08", 4973.06], ["2025-08-11", 4966.86], ["2025-08-12", 4957.16], ["2025-08-13", 4987.96], ["2025-08-14", 4966.36], ["2025-08-15", 4982.26], ["2025-08-18", 4981.96], ["2025-08-19", 4985.56], ["2025-08-20", 4988.36], ["2025-08-21", 4985.16], ["2025-08-22", 4985.26], ["2025-08-25", 4981.66], ["2025-08-26", 4971.26], ["2025-08-27", 4975.26], ["2025-08-28", 4972.66], ["2025-08-29", 4985.06], ["2025-09-02", 4982.86], ["2025-09-03", 4981.56], ["2025-09-04", 4967.26], ["2025-09-05", 5022.06], ["2025-09-08", 5008.56], ["2025-09-09", 5006.66], ["2025-09-10", 5020.66], ["2025-09-11", 5003.96], ["2025-09-12", 5007.76], ["2025-09-15", 5022.26], ["2025-09-16", 5033.26], ["2025-09-17", 5022.26], ["2025-09-18", 5010.36], ["2025-09-19", 5000.36], ["2025-09-22", 4999.26], ["2025-09-23", 5004.06], ["2025-09-24", 5019.76], ["2025-09-25", 4995.46], ["2025-09-26", 4988.66], ["2025-09-29", 4974.86], ["2025-09-30", 4988.56], ["2025-10-01", 5020.46], ["2025-10-02", 5015.76], ["2025-10-03", 5002.26], ["2025-10-06", 5003.36], ["2025-10-07", 5003.16], ["2025-10-08", 5004.96], ["2025-10-09", 5003.16], ["2025-10-10", 5023.36], ["2025-10-13", 5008.26], ["2025-10-14", 5009.26], ["2025-10-15", 4999.66], ["2025-10-16", 5009.46], ["2025-10-17", 5001.96], ["2025-10-20", 4994.06], ["2025-10-21", 4992.46], ["2025-10-22", 5000.26], ["2025-10-23", 4996.96], ["2025-10-24", 4999.06], ["2025-10-27", 4995.26], ["2025-10-28", 5005.06], ["2025-10-29", 4997.16], ["2025-10-30", 4998.96], ["2025-10-31", 4997.86], ["2025-11-03", 5011.66], ["2025-11-04", 5005.06], ["2025-11-05", 5005.46], ["2025-11-06", 5001.26], ["2025-11-07", 4991.06], ["2025-11-10", 4987.66], ["2025-11-11", 4982.26], ["2025-11-12", 4966.76], ["2025-11-13", 4989.96], ["2025-11-14", 4996.66], ["2025-11-17", 5020.96], ["2025-11-18", 5017.66], ["2025-11-19", 5014.06], ["2025-11-20", 5035.16], ["2025-11-21", 5035.26], ["2025-11-24", 5035.26], ["2025-11-25", 5032.96], ["2025-11-26", 5022.26], ["2025-11-28", 5013.36], ["2025-12-01", 5013.56], ["2025-12-02", 5019.76], ["2025-12-03", 5000.66], ["2025-12-04", 4990.16], ["2025-12-05", 5002.46], ["2025-12-08", 4997.76], ["2025-12-09", 4999.06], ["2025-12-10", 4982.76], ["2025-12-11", 4970.56], ["2025-12-12", 4973.86], ["2025-12-15", 4987.76], ["2025-12-16", 4980.96], ["2025-12-17", 4974.86], ["2025-12-18", 4968.36], ["2025-12-19", 4952.76], ["2025-12-22", 4927.66], ["2025-12-23", 4929.26], ["2025-12-24", 4923.36], ["2025-12-26", 4922.66], ["2025-12-29", 4927.86], ["2025-12-30", 4935.76], ["2025-12-31", 4941.86], ["2026-01-02", 4925.36], ["2026-01-05", 4904.26], ["2026-01-06", 4905.96], ["2026-01-07", 4922.36], ["2026-01-08", 4927.56], ["2026-01-09", 4939.56], ["2026-01-12", 4922.46], ["2026-01-13", 4929.56], ["2026-01-14", 4922.56], ["2026-01-15", 4913.86], ["2026-01-16", 4903.16], ["2026-01-20", 4931.86], ["2026-01-21", 4923.16], ["2026-01-22", 4901.36], ["2026-01-23", 4919.56], ["2026-01-26", 4912.06], ["2026-01-27", 4904.46], ["2026-01-28", 4907.16], ["2026-01-29", 4907.36], ["2026-01-30", 4902.16], ["2026-02-02", 4890.06], ["2026-02-03", 4904.16], ["2026-02-04", 4902.86], ["2026-02-05", 4921.16], ["2026-02-06", 4890.56], ["2026-02-09", 4869.66], ["2026-02-10", 4948.66], ["2026-02-11", 4986.76], ["2026-02-12", 4989.56], ["2026-02-13", 5000.26], ["2026-02-17", 5006.56], ["2026-02-18", 4983.86], ["2026-02-19", 4998.86], ["2026-02-20", 4997.16]], "recent_trades": [{"symbol": "HD", "prop": "hammer", "entry_ts": "2024-12-27 12:10", "exit_ts": "2024-12-27 14:10", "direction": "空売り", "qty": 2, "entry_price": 376.92, "exit_price": 378.35, "gross_pnl": -2.86, "cost": 1.07, "net_pnl": -3.93, "reason": "脱落決済"}, {"symbol": "BAC", "prop": "coin", "entry_ts": "2024-12-27 11:54", "exit_ts": "2024-12-27 14:10", "direction": "空売り", "qty": 18, "entry_price": 42.74, "exit_price": 42.86, "gross_pnl": -2.16, "cost": 2.9, "net_pnl": -5.06, "reason": "脱落決済"}, {"symbol": "CRM", "prop": "laptop", "entry_ts": "2024-12-27 10:03", "exit_ts": "2024-12-27 14:10", "direction": "空売り", "qty": 2, "entry_price": 334.45, "exit_price": 334.15, "gross_pnl": 0.6, "cost": 1.04, "net_pnl": -0.44, "reason": "脱落決済"}, {"symbol": "QCOM", "prop": "chip", "entry_ts": "2024-12-27 10:01", "exit_ts": "2024-12-27 13:51", "direction": "空売り", "qty": 5, "entry_price": 151.15, "exit_price": 152.02, "gross_pnl": -4.35, "cost": 1.52, "net_pnl": -5.87, "reason": "損切り"}, {"symbol": "AMD", "prop": "chip", "entry_ts": "2024-12-27 10:01", "exit_ts": "2024-12-27 11:24", "direction": "空売り", "qty": 6, "entry_price": 123.42, "exit_price": 124.03, "gross_pnl": -3.66, "cost": 1.67, "net_pnl": -5.33, "reason": "損切り"}, {"symbol": "SLB", "prop": "wrench", "entry_ts": "2024-12-27 10:52", "exit_ts": "2024-12-27 11:03", "direction": "買い", "qty": 21, "entry_price": 36.7, "exit_price": 36.47, "gross_pnl": -4.83, "cost": 3.88, "net_pnl": -8.71, "reason": "損切り"}, {"symbol": "C", "prop": "coin", "entry_ts": "2024-12-27 10:32", "exit_ts": "2024-12-27 10:52", "direction": "空売り", "qty": 11, "entry_price": 67.76, "exit_price": 68.07, "gross_pnl": -3.41, "cost": 2.51, "net_pnl": -5.92, "reason": "損切り"}, {"symbol": "UNH", "prop": "cross", "entry_ts": "2024-12-27 10:01", "exit_ts": "2024-12-27 10:29", "direction": "買い", "qty": 1, "entry_price": 493.13, "exit_price": 490.52, "gross_pnl": -2.61, "cost": 0.59, "net_pnl": -3.2, "reason": "損切り"}, {"symbol": "TSLA", "prop": "car", "entry_ts": "2024-12-27 10:02", "exit_ts": "2024-12-27 10:16", "direction": "空売り", "qty": 1, "entry_price": 436.1, "exit_price": 429.84, "gross_pnl": 6.26, "cost": 0.89, "net_pnl": 5.37, "reason": "利確"}, {"symbol": "ADBE", "prop": "laptop", "entry_ts": "2024-12-26 10:03", "exit_ts": "2024-12-26 15:46", "direction": "買い", "qty": 1, "entry_price": 449.11, "exit_price": 450.445, "gross_pnl": 1.33, "cost": 0.59, "net_pnl": 0.75, "reason": "引け決済"}, {"symbol": "CAT", "prop": "helmet", "entry_ts": "2024-12-26 11:15", "exit_ts": "2024-12-26 15:46", "direction": "買い", "qty": 2, "entry_price": 358.95, "exit_price": 359.38, "gross_pnl": 0.86, "cost": 1.58, "net_pnl": -0.72, "reason": "引け決済"}, {"symbol": "SBUX", "prop": "cup", "entry_ts": "2024-12-26 10:02", "exit_ts": "2024-12-26 15:46", "direction": "買い", "qty": 9, "entry_price": 86.94, "exit_price": 87.96, "gross_pnl": 9.18, "cost": 1.62, "net_pnl": 7.56, "reason": "引け決済"}, {"symbol": "JNJ", "prop": "pill", "entry_ts": "2024-12-26 13:37", "exit_ts": "2024-12-26 15:46", "direction": "空売り", "qty": 5, "entry_price": 138.94, "exit_price": 138.57, "gross_pnl": 1.85, "cost": 1.29, "net_pnl": 0.56, "reason": "引け決済"}, {"symbol": "DIS", "prop": "star", "entry_ts": "2024-12-26 10:02", "exit_ts": "2024-12-26 15:46", "direction": "買い", "qty": 7, "entry_price": 110.96, "exit_price": 110.54, "gross_pnl": -2.94, "cost": 1.51, "net_pnl": -4.45, "reason": "引け決済"}, {"symbol": "TSLA", "prop": "car", "entry_ts": "2024-12-26 12:49", "exit_ts": "2024-12-26 13:01", "direction": "空売り", "qty": 1, "entry_price": 451.86, "exit_price": 454.525, "gross_pnl": -2.66, "cost": 0.59, "net_pnl": -3.25, "reason": "損切り"}, {"symbol": "INTC", "prop": "chip", "entry_ts": "2024-12-26 10:01", "exit_ts": "2024-12-26 12:47", "direction": "買い", "qty": 38, "entry_price": 20.605, "exit_price": 20.495, "gross_pnl": -4.18, "cost": 5.68, "net_pnl": -9.86, "reason": "損切り"}, {"symbol": "PFE", "prop": "pill", "entry_ts": "2024-12-26 10:10", "exit_ts": "2024-12-26 11:14", "direction": "買い", "qty": 33, "entry_price": 23.68, "exit_price": 23.57, "gross_pnl": -3.63, "cost": 1.96, "net_pnl": -5.59, "reason": "損切り"}, {"symbol": "AVGO", "prop": "chip", "entry_ts": "2024-12-26 10:01", "exit_ts": "2024-12-26 10:10", "direction": "買い", "qty": 3, "entry_price": 237.72, "exit_price": 236.24, "gross_pnl": -4.44, "cost": 1.21, "net_pnl": -5.65, "reason": "損切り"}, {"symbol": "UNH", "prop": "cross", "entry_ts": "2024-12-23 10:18", "exit_ts": "2024-12-26 10:02", "direction": "買い", "qty": 1, "entry_price": 483.82, "exit_price": 491.56, "gross_pnl": 7.74, "cost": 0.71, "net_pnl": 7.03, "reason": "利確"}, {"symbol": "V", "prop": "card", "entry_ts": "2024-12-23 10:03", "exit_ts": "2024-12-24 10:04", "direction": "空売り", "qty": 2, "entry_price": 311.17, "exit_price": 315.43, "gross_pnl": -8.52, "cost": 0.8, "net_pnl": -9.32, "reason": "損切り"}, {"symbol": "JPM", "prop": "coin", "entry_ts": "2024-12-23 10:04", "exit_ts": "2024-12-24 10:02", "direction": "空売り", "qty": 3, "entry_price": 227.11, "exit_price": 231.78, "gross_pnl": -14.01, "cost": 1.33, "net_pnl": -15.34, "reason": "損切り"}, {"symbol": "TSLA", "prop": "car", "entry_ts": "2024-12-23 10:08", "exit_ts": "2024-12-24 10:01", "direction": "空売り", "qty": 1, "entry_price": 424.7, "exit_price": 449.52, "gross_pnl": -24.82, "cost": 1.43, "net_pnl": -26.25, "reason": "損切り"}, {"symbol": "QQQ", "prop": "crown", "entry_ts": "2024-12-23 10:09", "exit_ts": "2024-12-24 10:01", "direction": "空売り", "qty": 1, "entry_price": 513.71, "exit_price": 522.95, "gross_pnl": -9.24, "cost": 0.46, "net_pnl": -9.7, "reason": "損切り"}, {"symbol": "MU", "prop": "chip", "entry_ts": "2024-12-23 10:11", "exit_ts": "2024-12-23 10:15", "direction": "空売り", "qty": 9, "entry_price": 88.01, "exit_price": 88.65, "gross_pnl": -5.76, "cost": 1.64, "net_pnl": -7.4, "reason": "損切り"}, {"symbol": "XOM", "prop": "drum", "entry_ts": "2024-12-23 10:02", "exit_ts": "2024-12-23 10:11", "direction": "空売り", "qty": 8, "entry_price": 99.36, "exit_price": 99.57, "gross_pnl": -1.68, "cost": 3.28, "net_pnl": -4.96, "reason": "損切り"}, {"symbol": "AMD", "prop": "chip", "entry_ts": "2024-12-23 10:02", "exit_ts": "2024-12-23 10:09", "direction": "買い", "qty": 6, "entry_price": 125.06, "exit_price": 124.46, "gross_pnl": -3.6, "cost": 1.71, "net_pnl": -5.31, "reason": "損切り"}, {"symbol": "WMT", "prop": "basket", "entry_ts": "2024-12-23 10:03", "exit_ts": "2024-12-23 10:04", "direction": "空売り", "qty": 9, "entry_price": 87.52, "exit_price": 88.21, "gross_pnl": -6.21, "cost": 2.97, "net_pnl": -9.18, "reason": "損切り"}, {"symbol": "JNJ", "prop": "pill", "entry_ts": "2024-12-20 10:01", "exit_ts": "2024-12-20 15:59", "direction": "買い", "qty": 5, "entry_price": 137.65, "exit_price": 137.85, "gross_pnl": 1.0, "cost": 0.97, "net_pnl": 0.03, "reason": "引け強制決済"}, {"symbol": "COP", "prop": "drum", "entry_ts": "2024-12-20 11:18", "exit_ts": "2024-12-20 15:53", "direction": "買い", "qty": 8, "entry_price": 90.33, "exit_price": 89.9, "gross_pnl": -3.44, "cost": 1.72, "net_pnl": -5.16, "reason": "損切り"}, {"symbol": "PFE", "prop": "pill", "entry_ts": "2024-12-20 11:55", "exit_ts": "2024-12-20 15:46", "direction": "買い", "qty": 34, "entry_price": 23.38, "exit_price": 23.34, "gross_pnl": -1.36, "cost": 1.79, "net_pnl": -3.15, "reason": "引け決済"}], "unseal_count": 0}], "book": [{"symbol": "INTC", "prop": "chip", "sector": "半導体", "trades": 125, "win_rate": 26.4, "net_pnl": -496.86, "net_jpy": -76517, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "NVDA", "prop": "chip", "sector": "半導体", "trades": 107, "win_rate": 33.6, "net_pnl": -188.09, "net_jpy": -28966, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "AVGO", "prop": "chip", "sector": "半導体", "trades": 105, "win_rate": 30.5, "net_pnl": -205.25, "net_jpy": -31609, "best_strategy": "前日大陽線の翌朝", "best_pnl": 8.6}, {"symbol": "MU", "prop": "chip", "sector": "半導体", "trades": 104, "win_rate": 34.6, "net_pnl": -240.79, "net_jpy": -37082, "best_strategy": "出来高スパイク追い", "best_pnl": 14.57}, {"symbol": "TSLA", "prop": "car", "sector": "自動車・移動", "trades": 98, "win_rate": 39.8, "net_pnl": -146.27, "net_jpy": -22526, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "AMD", "prop": "chip", "sector": "半導体", "trades": 85, "win_rate": 36.5, "net_pnl": -158.44, "net_jpy": -24399, "best_strategy": "寄り付きブレイク", "best_pnl": 1.28}, {"symbol": "BA", "prop": "plane", "sector": "航空機", "trades": 81, "win_rate": 39.5, "net_pnl": -119.56, "net_jpy": -18412, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "ORCL", "prop": "laptop", "sector": "ソフトウェア", "trades": 76, "win_rate": 32.9, "net_pnl": -150.34, "net_jpy": -23152, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "UBER", "prop": "car", "sector": "自動車・移動", "trades": 65, "win_rate": 30.8, "net_pnl": -168.17, "net_jpy": -25898, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "MS", "prop": "coin", "sector": "銀行", "trades": 52, "win_rate": 17.3, "net_pnl": -201.94, "net_jpy": -31099, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "CAT", "prop": "helmet", "sector": "建設機械", "trades": 51, "win_rate": 49.0, "net_pnl": 16.51, "net_jpy": 2542, "best_strategy": "寄り付きブレイク", "best_pnl": 28.74}, {"symbol": "CRM", "prop": "laptop", "sector": "ソフトウェア", "trades": 51, "win_rate": 49.0, "net_pnl": -2.48, "net_jpy": -382, "best_strategy": "寄り付きブレイク", "best_pnl": 6.26}, {"symbol": "GOOGL", "prop": "globe", "sector": "インターネット", "trades": 50, "win_rate": 34.0, "net_pnl": -58.32, "net_jpy": -8982, "best_strategy": "前日大陽線の翌朝", "best_pnl": 16.86}, {"symbol": "IBM", "prop": "laptop", "sector": "ソフトウェア", "trades": 50, "win_rate": 32.0, "net_pnl": -92.24, "net_jpy": -14205, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "QCOM", "prop": "chip", "sector": "半導体", "trades": 50, "win_rate": 40.0, "net_pnl": -90.69, "net_jpy": -13966, "best_strategy": "出来高スパイク追い", "best_pnl": 36.39}, {"symbol": "C", "prop": "coin", "sector": "銀行", "trades": 49, "win_rate": 26.5, "net_pnl": -180.56, "net_jpy": -27807, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "META", "prop": "globe", "sector": "インターネット", "trades": 48, "win_rate": 29.2, "net_pnl": -65.51, "net_jpy": -10089, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "UNH", "prop": "cross", "sector": "医療保険", "trades": 48, "win_rate": 27.1, "net_pnl": -85.54, "net_jpy": -13173, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "NKE", "prop": "shoe", "sector": "アパレル", "trades": 47, "win_rate": 34.0, "net_pnl": -110.62, "net_jpy": -17036, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "ADBE", "prop": "laptop", "sector": "ソフトウェア", "trades": 46, "win_rate": 37.0, "net_pnl": -22.79, "net_jpy": -3509, "best_strategy": "寄り付きブレイク", "best_pnl": 8.99}, {"symbol": "COP", "prop": "drum", "sector": "石油・ガス", "trades": 46, "win_rate": 34.8, "net_pnl": -72.58, "net_jpy": -11177, "best_strategy": "前日大陽線の翌朝", "best_pnl": 11.94}, {"symbol": "MRK", "prop": "pill", "sector": "医薬品", "trades": 46, "win_rate": 34.8, "net_pnl": -82.68, "net_jpy": -12733, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "SLB", "prop": "wrench", "sector": "油田サービス", "trades": 46, "win_rate": 32.6, "net_pnl": -131.64, "net_jpy": -20273, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "ABBV", "prop": "pill", "sector": "医薬品", "trades": 43, "win_rate": 41.9, "net_pnl": -95.89, "net_jpy": -14767, "best_strategy": "VWAP回帰", "best_pnl": 0.39}, {"symbol": "GS", "prop": "coin", "sector": "銀行", "trades": 42, "win_rate": 33.3, "net_pnl": -62.04, "net_jpy": -9554, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "NFLX", "prop": "screen", "sector": "配信", "trades": 42, "win_rate": 40.5, "net_pnl": -13.77, "net_jpy": -2121, "best_strategy": "出来高スパイク追い", "best_pnl": 1.55}, {"symbol": "TXN", "prop": "chip", "sector": "半導体", "trades": 41, "win_rate": 41.5, "net_pnl": -56.18, "net_jpy": -8652, "best_strategy": "寄り付きブレイク", "best_pnl": 0.49}, {"symbol": "AMZN", "prop": "box", "sector": "EC・物流", "trades": 40, "win_rate": 40.0, "net_pnl": 23.62, "net_jpy": 3637, "best_strategy": "前日大陽線の翌朝", "best_pnl": 39.11}, {"symbol": "AXP", "prop": "card", "sector": "決済", "trades": 40, "win_rate": 30.0, "net_pnl": -87.74, "net_jpy": -13511, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "BAC", "prop": "coin", "sector": "銀行", "trades": 40, "win_rate": 27.5, "net_pnl": -103.56, "net_jpy": -15949, "best_strategy": "VWAP回帰", "best_pnl": 3.84}, {"symbol": "WFC", "prop": "coin", "sector": "銀行", "trades": 40, "win_rate": 30.0, "net_pnl": -104.35, "net_jpy": -16069, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "PFE", "prop": "pill", "sector": "医薬品", "trades": 38, "win_rate": 26.3, "net_pnl": -98.84, "net_jpy": -15222, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "SBUX", "prop": "cup", "sector": "飲食", "trades": 38, "win_rate": 42.1, "net_pnl": -22.09, "net_jpy": -3402, "best_strategy": "寄り付きブレイク", "best_pnl": 17.12}, {"symbol": "JNJ", "prop": "pill", "sector": "医薬品", "trades": 37, "win_rate": 32.4, "net_pnl": -77.86, "net_jpy": -11991, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "SCHW", "prop": "chart", "sector": "証券・その他", "trades": 37, "win_rate": 32.4, "net_pnl": -103.66, "net_jpy": -15963, "best_strategy": "前日大陽線の翌朝", "best_pnl": 11.91}, {"symbol": "OXY", "prop": "drum", "sector": "石油・ガス", "trades": 36, "win_rate": 41.7, "net_pnl": -83.26, "net_jpy": -12821, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "CVX", "prop": "drum", "sector": "石油・ガス", "trades": 34, "win_rate": 32.4, "net_pnl": -74.18, "net_jpy": -11424, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "DIS", "prop": "star", "sector": "エンタメ", "trades": 34, "win_rate": 32.4, "net_pnl": -62.85, "net_jpy": -9679, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "JPM", "prop": "coin", "sector": "銀行", "trades": 34, "win_rate": 41.2, "net_pnl": -30.61, "net_jpy": -4713, "best_strategy": "前日大陽線の翌朝", "best_pnl": 7.17}, {"symbol": "MCD", "prop": "burger", "sector": "外食", "trades": 31, "win_rate": 45.2, "net_pnl": -15.56, "net_jpy": -2396, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "HD", "prop": "hammer", "sector": "住関連小売", "trades": 30, "win_rate": 36.7, "net_pnl": -26.23, "net_jpy": -4039, "best_strategy": "VWAP回帰", "best_pnl": 4.48}, {"symbol": "QQQ", "prop": "crown", "sector": "指数ETF", "trades": 29, "win_rate": 34.5, "net_pnl": -39.82, "net_jpy": -6133, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "V", "prop": "card", "sector": "決済", "trades": 29, "win_rate": 48.3, "net_pnl": -16.62, "net_jpy": -2560, "best_strategy": "VWAP回帰", "best_pnl": 6.08}, {"symbol": "AAPL", "prop": "phone", "sector": "電子機器", "trades": 27, "win_rate": 48.1, "net_pnl": 10.12, "net_jpy": 1558, "best_strategy": "前日大陽線の翌朝", "best_pnl": 12.04}, {"symbol": "MA", "prop": "card", "sector": "決済", "trades": 27, "win_rate": 29.6, "net_pnl": -13.1, "net_jpy": -2017, "best_strategy": "VWAP回帰", "best_pnl": 1.89}, {"symbol": "MSFT", "prop": "laptop", "sector": "ソフトウェア", "trades": 27, "win_rate": 37.0, "net_pnl": -14.85, "net_jpy": -2287, "best_strategy": "出来高スパイク追い", "best_pnl": 12.01}, {"symbol": "WMT", "prop": "basket", "sector": "小売", "trades": 27, "win_rate": 37.0, "net_pnl": -52.28, "net_jpy": -8052, "best_strategy": "VWAP回帰", "best_pnl": 6.85}, {"symbol": "XOM", "prop": "drum", "sector": "石油・ガス", "trades": 26, "win_rate": 42.3, "net_pnl": -30.74, "net_jpy": -4734, "best_strategy": null, "best_pnl": 0.0}, {"symbol": "LLY", "prop": "pill", "sector": "医薬品", "trades": 24, "win_rate": 45.8, "net_pnl": 3.85, "net_jpy": 593, "best_strategy": "出来高スパイク追い", "best_pnl": 60.29}, {"symbol": "CSCO", "prop": "wifi", "sector": "通信機器", "trades": 23, "win_rate": 8.7, "net_pnl": -95.04, "net_jpy": -14636, "best_strategy": "VWAP回帰", "best_pnl": 0.72}, {"symbol": "SPY", "prop": "crown", "sector": "指数ETF", "trades": 17, "win_rate": 70.6, "net_pnl": 13.43, "net_jpy": 2069, "best_strategy": "寄り付きブレイク", "best_pnl": 11.3}, {"symbol": "COST", "prop": "basket", "sector": "小売", "trades": 7, "win_rate": 28.6, "net_pnl": -3.18, "net_jpy": -490, "best_strategy": "出来高スパイク追い", "best_pnl": 2.49}]};
+render();
+</script>
